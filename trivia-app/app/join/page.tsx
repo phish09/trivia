@@ -1,11 +1,11 @@
 "use client";
 
 import { joinGame, verifyPlayerSession } from "../actions";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
 
-export default function JoinPage() {
+function JoinForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [code, setCode] = useState("");
@@ -97,5 +97,18 @@ export default function JoinPage() {
         Join
       </button>
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8">
+        <h1 className="text-xl mb-4">Join a Game</h1>
+        <p>Loading...</p>
+      </div>
+    }>
+      <JoinForm />
+    </Suspense>
   );
 }

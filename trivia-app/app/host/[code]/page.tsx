@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { getGame, addQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame } from "../../actions";
 import { useRouter } from "next/navigation";
 
-export default function HostGamePage() {
+function HostGameContent() {
   const params = useParams();
   const router = useRouter();
   const code = params.code as string;
@@ -413,5 +413,18 @@ export default function HostGamePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function HostGamePage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8">
+        <h1 className="text-2xl font-bold mb-4">Host Game</h1>
+        <p>Loading...</p>
+      </div>
+    }>
+      <HostGameContent />
+    </Suspense>
   );
 }

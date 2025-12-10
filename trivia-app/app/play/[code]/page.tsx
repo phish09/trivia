@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getGame, submitAnswer, verifyPlayerSession, leaveGame } from "../../actions";
 import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
 
-export default function PlayPage() {
+function PlayPageContent() {
   const params = useParams();
   const router = useRouter();
   const code = params.code as string;
@@ -497,5 +497,18 @@ export default function PlayPage() {
         </ol>
       </div>
     </div>
+  );
+}
+
+export default function PlayPage() {
+  return (
+    <Suspense fallback={
+      <div className="p-8">
+        <h1 className="text-2xl font-bold mb-4">Game</h1>
+        <p>Loading...</p>
+      </div>
+    }>
+      <PlayPageContent />
+    </Suspense>
   );
 }
