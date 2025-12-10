@@ -1,7 +1,6 @@
 [build]
   base = "trivia-app"
   command = "npm run build"
-  # Note: Do NOT set publish directory - let @netlify/plugin-nextjs handle it automatically
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
