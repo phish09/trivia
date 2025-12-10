@@ -1,0 +1,34 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Game {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  hostName  String
+  questions Question[]
+  players   Player[]
+  createdAt DateTime @default(now())
+}
+
+model Player {
+  id        String @id @default(cuid())
+  username  String
+  game      Game   @relation(fields: [gameId], references: [id])
+  gameId    String
+}
+
+model Question {
+  id        String   @id @default(cuid())
+  text       String
+  choices    String   // JSON array stored as string
+  answer     Int
+  points     Int
+  game       Game     @relation(fields: [gameId], references: [id])
+  gameId     String
+}
