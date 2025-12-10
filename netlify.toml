@@ -1,5 +1,4 @@
 [build]
-  base = "trivia-app"
   command = "npm run build"
 
 [[plugins]]
