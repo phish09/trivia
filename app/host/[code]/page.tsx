@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams } from "next/navigation";
-import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints } from "../../actions";
+import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword } from "../../actions";
 import { useRouter } from "next/navigation";
 
 function HostGameContent() {
@@ -33,10 +33,78 @@ function HostGameContent() {
   const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const currentQuestionIdRef = useRef<string | null>(null);
+  const [passwordPrompt, setPasswordPrompt] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordVerified, setPasswordVerified] = useState(false);
 
   useEffect(() => {
-    loadGame();
+    checkPassword();
   }, [code]);
+
+  async function checkPassword() {
+    // Check if password is stored in sessionStorage
+    const storedPassword = sessionStorage.getItem(`host_password_${code}`);
+    if (storedPassword) {
+      try {
+        const isValid = await verifyHostPassword(code, storedPassword);
+        if (isValid) {
+          setPasswordVerified(true);
+          loadGame();
+          return;
+        }
+      } catch (error) {
+        // Password invalid or game not found, show prompt
+      }
+    }
+    
+    // Check if game requires password
+    try {
+      const gameData = await getGame(code);
+      // If game has a password and we haven't verified, show prompt
+      if (gameData.hostPassword && !storedPassword) {
+        setPasswordPrompt(true);
+      } else {
+        // No password required or already verified
+        setPasswordVerified(true);
+        loadGame();
+      }
+    } catch (error) {
+      // Game not found or error, try to show prompt
+      // But first check if we have a stored password
+      if (!storedPassword) {
+        setPasswordPrompt(true);
+      } else {
+        // We have stored password but game fetch failed, try loading anyway
+        setPasswordVerified(true);
+        loadGame();
+      }
+    }
+  }
+
+  async function handlePasswordSubmit() {
+    if (!passwordInput.trim()) {
+      setPasswordError("Please enter a password");
+      return;
+    }
+    
+    try {
+      const isValid = await verifyHostPassword(code, passwordInput.trim());
+      if (isValid) {
+        // Store password in sessionStorage
+        sessionStorage.setItem(`host_password_${code}`, passwordInput.trim());
+        setPasswordVerified(true);
+        setPasswordPrompt(false);
+        setPasswordError(null);
+        loadGame();
+      } else {
+        setPasswordError("Incorrect password. Please try again.");
+        setPasswordInput("");
+      }
+    } catch (error: any) {
+      setPasswordError(error?.message || "Failed to verify password. Please try again.");
+    }
+  }
 
   // Poll for updates when there's an active question waiting for players to answer
   useEffect(() => {
@@ -308,11 +376,66 @@ function HostGameContent() {
     }
   }
 
-  if (!game) {
+  // Show password prompt if password is required and not verified
+  if (passwordPrompt && !passwordVerified) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="max-w-md w-full">
+          <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+            <div className="text-center">
+              <div className="inline-block p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg mb-4">
+                <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">Host Password Required</h1>
+              <p className="text-slate-600">Enter the password to access host controls for game code: <span className="font-bold text-blue-600">{code}</span></p>
+            </div>
+            
+            {passwordError && (
+              <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                <p className="text-sm text-red-700">{passwordError}</p>
+              </div>
+            )}
+            
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Password
+              </label>
+              <input
+                type="password"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                placeholder="Enter host password"
+                value={passwordInput}
+                onChange={(e) => {
+                  setPasswordInput(e.target.value);
+                  setPasswordError(null);
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handlePasswordSubmit()}
+                autoFocus
+              />
+            </div>
+            
+            <button
+              className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2"
+              onClick={handlePasswordSubmit}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              Verify Password
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!game || !passwordVerified) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-slate-50 to-blue-50">
         <div className="text-center">
-          <div className="inline-block p-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl shadow-lg mb-4 animate-pulse">
+          <div className="inline-block p-4 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg mb-4 animate-pulse">
             <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 
 export default function HostPage() {
   const [name, setName] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -15,7 +16,11 @@ export default function HostPage() {
     setError(null);
     setLoading(true);
     try {
-      const game = await createGame(name);
+      const game = await createGame(name, password.trim() || undefined);
+      // Store password in sessionStorage for this game
+      if (password.trim()) {
+        sessionStorage.setItem(`host_password_${game.code}`, password.trim());
+      }
       router.push(`/host/${game.code}`);
     } catch (err: any) {
       console.error("Failed to create game:", err);
@@ -69,6 +74,23 @@ export default function HostPage() {
                 disabled={loading}
                 onKeyDown={(e) => e.key === 'Enter' && !loading && handleCreate()}
               />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Host Password <span className="text-slate-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="password"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                placeholder="Set a password to protect host controls"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
+                onKeyDown={(e) => e.key === 'Enter' && !loading && handleCreate()}
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                This password protects the host interface. Players joining the game don't need it.
+              </p>
             </div>
 
             <button

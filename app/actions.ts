@@ -3,13 +3,13 @@
 import { getSupabaseClient } from "@/lib/db";
 import { generateGameCode } from "@/lib/util";
 
-export async function createGame(hostName: string) {
+export async function createGame(hostName: string, password?: string) {
   try {
     const supabase = getSupabaseClient();
     const code = generateGameCode();
     const { data, error } = await supabase
       .from("games")
-      .insert({ code, host_name: hostName })
+      .insert({ code, host_name: hostName, host_password: password || null })
       .select()
       .single();
     
@@ -222,6 +222,27 @@ export async function reorderQuestions(gameId: string, questionIds: string[]) {
   return { success: true };
 }
 
+export async function verifyHostPassword(code: string, password: string) {
+  const supabase = getSupabaseClient();
+  const { data: game, error } = await supabase
+    .from("games")
+    .select("host_password")
+    .eq("code", code)
+    .single();
+  
+  if (error || !game) {
+    throw new Error("Game not found");
+  }
+  
+  // If no password is set, allow access
+  if (!game.host_password) {
+    return true;
+  }
+  
+  // Verify password matches
+  return game.host_password === password;
+}
+
 export async function getGame(code: string) {
   const supabase = getSupabaseClient();
   // Cleanup old games before fetching (runs occasionally)
@@ -272,6 +293,7 @@ export async function getGame(code: string) {
     id: game.id,
     code: game.code,
     hostName: game.host_name,
+    hostPassword: game.host_password || null,
     createdAt: game.created_at,
     currentQuestionIndex: game.current_question_index,
     answersRevealed: game.answers_revealed || false,
