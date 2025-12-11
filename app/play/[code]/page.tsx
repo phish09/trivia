@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getGame, submitAnswer, verifyPlayerSession, leaveGame } from "../../actions";
 import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
@@ -16,6 +16,9 @@ function PlayPageContent() {
   const [submitted, setSubmitted] = useState(false);
   const [verifying, setVerifying] = useState(true);
   const [leaving, setLeaving] = useState(false);
+  const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const currentQuestionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -98,6 +101,12 @@ function PlayPageContent() {
       const previousQuestionIndex = game?.currentQuestionIndex;
       const newQuestionIndex = gameData.currentQuestionIndex;
       const questionChanged = previousQuestionIndex !== newQuestionIndex;
+      
+      // Reset timer when question changes
+      if (questionChanged) {
+        setQuestionStartTime(null);
+        setTimeRemaining(null);
+      }
       
       setGame(gameData);
       
@@ -194,6 +203,53 @@ function PlayPageContent() {
     }
   }, [playerId, verifying, game, submitted]);
 
+  // Timer countdown logic for player side
+  useEffect(() => {
+    if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined || game.answersRevealed) {
+      setQuestionStartTime(null);
+      setTimeRemaining(null);
+      currentQuestionIdRef.current = null;
+      return;
+    }
+
+    const currentQuestion = game.questions[game.currentQuestionIndex];
+    if (!currentQuestion || !currentQuestion.hasTimer || submitted) {
+      setQuestionStartTime(null);
+      setTimeRemaining(null);
+      currentQuestionIdRef.current = null;
+      return;
+    }
+
+    // Initialize start time when question changes (track by question ID)
+    if (currentQuestionIdRef.current !== currentQuestion.id) {
+      const startTime = Date.now();
+      setQuestionStartTime(startTime);
+      setTimeRemaining(currentQuestion.timerSeconds);
+      currentQuestionIdRef.current = currentQuestion.id;
+    }
+
+    // Update timer every second
+    const interval = setInterval(() => {
+      setQuestionStartTime((prevStartTime) => {
+        if (prevStartTime === null || !currentQuestion.timerSeconds) {
+          setTimeRemaining(null);
+          return prevStartTime;
+        }
+        
+        const elapsed = Math.floor((Date.now() - prevStartTime) / 1000);
+        const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
+        setTimeRemaining(remaining);
+
+        if (remaining === 0) {
+          clearInterval(interval);
+        }
+        return prevStartTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [game?.currentQuestionIndex ?? null, game?.answersRevealed ?? false, submitted]);
+
   async function handleAnswerSelect(answerIndex: number) {
     if (submitted || !game || !playerId) return;
     setSelectedAnswer(answerIndex);
@@ -202,6 +258,11 @@ function PlayPageContent() {
   async function handleSubmitAnswer() {
     const currentQuestion = game?.questions[game.currentQuestionIndex];
     if (!game || !playerId || submitted || !currentQuestion) return;
+    
+    // Check if timer expired
+    if (currentQuestion.hasTimer && timeRemaining === 0) {
+      return; // Timer expired, don't allow submission
+    }
     
     // Validate answer based on question type
     if (currentQuestion.isFillInBlank) {
@@ -614,6 +675,29 @@ function PlayPageContent() {
                 )}
               </div>
             </div>
+            {currentQuestion.hasTimer && timeRemaining !== null && !submitted && !game.answersRevealed && (
+              <div className={`mb-4 flex items-center justify-center gap-2 p-3 rounded-xl border-2 ${
+                timeRemaining === 0 
+                  ? 'bg-red-50 border-red-300' 
+                  : timeRemaining <= 10 
+                    ? 'bg-orange-50 border-orange-200' 
+                    : 'bg-orange-50 border-orange-200'
+              }`}>
+                <svg className={`w-6 h-6 ${timeRemaining === 0 ? 'text-red-600' : 'text-orange-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                {timeRemaining === 0 ? (
+                  <span className="text-2xl font-bold text-red-600">Time's Up!</span>
+                ) : (
+                  <>
+                    <span className={`text-2xl font-bold ${timeRemaining <= 10 ? 'text-red-600 animate-pulse' : 'text-orange-600'}`}>
+                      {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-sm text-slate-600 font-medium">remaining</span>
+                  </>
+                )}
+              </div>
+            )}
             <h2 className="text-2xl font-bold text-slate-800 mb-6">{currentQuestion.text}</h2>
           </div>
 
@@ -668,11 +752,23 @@ function PlayPageContent() {
                 Answer submitted. Waiting for host to reveal results...
               </p>
             </div>
+          ) : currentQuestion.hasTimer && timeRemaining === 0 ? (
+            <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 text-center">
+              <p className="text-red-800 font-bold text-lg flex items-center justify-center gap-2">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Too Slow Loser
+              </p>
+            </div>
           ) : (
             <button
               className="w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
               onClick={handleSubmitAnswer}
-              disabled={currentQuestion.isFillInBlank ? !textAnswer.trim() : selectedAnswer === null}
+              disabled={
+                (currentQuestion.hasTimer && timeRemaining === 0) ||
+                (currentQuestion.isFillInBlank ? !textAnswer.trim() : selectedAnswer === null)
+              }
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />

@@ -119,6 +119,8 @@ export async function addQuestion(gameId: string, q: {
   points: number;
   multiplier: number;
   isFillInBlank?: boolean;
+  hasTimer?: boolean;
+  timerSeconds?: number;
 }) {
   const supabase = getSupabaseClient();
   // Get the current max question_order for this game to add new question at the end
@@ -133,18 +135,26 @@ export async function addQuestion(gameId: string, q: {
     ? (existingQuestions[0].question_order || 0) + 1 
     : 0;
   
+  const insertData: any = {
+    text: q.text,
+    choices: q.choices,
+    answer: q.answer,
+    points: q.points,
+    multiplier: q.multiplier,
+    is_fill_in_blank: q.isFillInBlank || false,
+    game_id: gameId,
+    question_order: nextOrder,
+    has_timer: q.hasTimer || false,
+  };
+  
+  // Only set timer_seconds if timer is enabled
+  if (q.hasTimer && q.timerSeconds !== undefined) {
+    insertData.timer_seconds = q.timerSeconds;
+  }
+  
   const { data, error } = await supabase
     .from("questions")
-    .insert({
-      text: q.text,
-      choices: q.choices,
-      answer: q.answer,
-      points: q.points,
-      multiplier: q.multiplier,
-      is_fill_in_blank: q.isFillInBlank || false,
-      game_id: gameId,
-      question_order: nextOrder,
-    })
+    .insert(insertData)
     .select()
     .single();
   
@@ -159,18 +169,31 @@ export async function updateQuestion(questionId: string, q: {
   points: number;
   multiplier: number;
   isFillInBlank?: boolean;
+  hasTimer?: boolean;
+  timerSeconds?: number;
 }) {
   const supabase = getSupabaseClient();
+  const updateData: any = {
+    text: q.text,
+    choices: q.choices,
+    answer: q.answer,
+    points: q.points,
+    multiplier: q.multiplier,
+    is_fill_in_blank: q.isFillInBlank || false,
+    has_timer: q.hasTimer || false,
+  };
+  
+  // Only set timer_seconds if timer is enabled
+  if (q.hasTimer && q.timerSeconds !== undefined) {
+    updateData.timer_seconds = q.timerSeconds;
+  } else if (!q.hasTimer) {
+    // Clear timer_seconds if timer is disabled
+    updateData.timer_seconds = null;
+  }
+  
   const { data, error } = await supabase
     .from("questions")
-    .update({
-      text: q.text,
-      choices: q.choices,
-      answer: q.answer,
-      points: q.points,
-      multiplier: q.multiplier,
-      is_fill_in_blank: q.isFillInBlank || false,
-    })
+    .update(updateData)
     .eq("id", questionId)
     .select()
     .single();
@@ -219,17 +242,17 @@ export async function getGame(code: string) {
   
   if (gameError || !game) throw new Error("Game not found");
 
-  // Check if game is older than 7 days and delete it
+  // Check if game is older than 14 days and delete it
   const gameAge = Date.now() - new Date(game.created_at).getTime();
-  const sevenDays = 7 * 24 * 60 * 60 * 1000;
+  const fourteenDays = 14 * 24 * 60 * 60 * 1000;
   
-  if (gameAge > sevenDays) {
+  if (gameAge > fourteenDays) {
     // Game is too old, delete it
     await supabase
       .from("games")
       .delete()
       .eq("id", game.id);
-    throw new Error("Game has expired (older than 7 days)");
+    throw new Error("Game has expired (older than 14 days)");
   }
 
   // Get player answers and scores
@@ -269,6 +292,8 @@ export async function getGame(code: string) {
         gameId: q.game_id,
         questionOrder: q.question_order || 0,
         isFillInBlank: q.is_fill_in_blank || false,
+        hasTimer: q.has_timer || false,
+        timerSeconds: q.timer_seconds || null,
       })),
     players: (playersWithScores || []).map((p: any) => ({
       id: p.id,
@@ -626,13 +651,13 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
 
 export async function cleanupOldGames() {
   const supabase = getSupabaseClient();
-  // Delete games older than 7 days
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // Delete games older than 14 days
+  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
   
   const { error } = await supabase
     .from("games")
     .delete()
-    .lt("created_at", sevenDaysAgo);
+    .lt("created_at", fourteenDaysAgo);
   
   if (error) {
     console.error("Failed to cleanup old games:", error);

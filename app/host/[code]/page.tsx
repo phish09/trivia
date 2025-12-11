@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints } from "../../actions";
 import { useRouter } from "next/navigation";
@@ -16,6 +16,8 @@ function HostGameContent() {
   const [points, setPoints] = useState(10);
   const [multiplier, setMultiplier] = useState(1);
   const [isFillInBlank, setIsFillInBlank] = useState(false);
+  const [hasTimer, setHasTimer] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(30);
   const [ending, setEnding] = useState(false);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editQuestionText, setEditQuestionText] = useState("");
@@ -24,8 +26,13 @@ function HostGameContent() {
   const [editPoints, setEditPoints] = useState(10);
   const [editMultiplier, setEditMultiplier] = useState(1);
   const [editIsFillInBlank, setEditIsFillInBlank] = useState(false);
+  const [editHasTimer, setEditHasTimer] = useState(false);
+  const [editTimerSeconds, setEditTimerSeconds] = useState(30);
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const currentQuestionIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     loadGame();
@@ -48,6 +55,53 @@ function HostGameContent() {
     }
   }, [game]);
 
+  // Timer countdown logic
+  useEffect(() => {
+    if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) {
+      setQuestionStartTime(null);
+      setTimeRemaining(null);
+      currentQuestionIdRef.current = null;
+      return;
+    }
+
+    const currentQuestion = game.questions[game.currentQuestionIndex];
+    if (!currentQuestion || !currentQuestion.hasTimer || game.answersRevealed) {
+      setQuestionStartTime(null);
+      setTimeRemaining(null);
+      currentQuestionIdRef.current = null;
+      return;
+    }
+
+    // Initialize start time when question changes (track by question ID)
+    if (currentQuestionIdRef.current !== currentQuestion.id) {
+      const startTime = Date.now();
+      setQuestionStartTime(startTime);
+      setTimeRemaining(currentQuestion.timerSeconds);
+      currentQuestionIdRef.current = currentQuestion.id;
+    }
+
+    // Update timer every second
+    const interval = setInterval(() => {
+      setQuestionStartTime((prevStartTime) => {
+        if (prevStartTime === null || !currentQuestion.timerSeconds) {
+          setTimeRemaining(null);
+          return prevStartTime;
+        }
+        
+        const elapsed = Math.floor((Date.now() - prevStartTime) / 1000);
+        const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
+        setTimeRemaining(remaining);
+
+        if (remaining === 0) {
+          clearInterval(interval);
+        }
+        return prevStartTime;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [game?.currentQuestionIndex ?? null, game?.answersRevealed ?? false]);
+
   async function loadGame() {
     try {
       const gameData = await getGame(code);
@@ -67,6 +121,8 @@ function HostGameContent() {
       points,
       multiplier,
       isFillInBlank,
+      hasTimer,
+      timerSeconds: hasTimer ? timerSeconds : undefined,
     });
     setQuestionText("");
     setChoices(["", "", "", ""]);
@@ -74,6 +130,8 @@ function HostGameContent() {
     setPoints(10);
     setMultiplier(1);
     setIsFillInBlank(false);
+    setHasTimer(false);
+    setTimerSeconds(30);
     loadGame();
   }
 
@@ -90,6 +148,8 @@ function HostGameContent() {
     setEditPoints(question.points);
     setEditMultiplier(question.multiplier || 1);
     setEditIsFillInBlank(question.isFillInBlank || false);
+    setEditHasTimer(question.hasTimer || false);
+    setEditTimerSeconds(question.timerSeconds || 30);
   }
 
   function handleCancelEdit() {
@@ -100,6 +160,8 @@ function HostGameContent() {
     setEditPoints(10);
     setEditMultiplier(1);
     setEditIsFillInBlank(false);
+    setEditHasTimer(false);
+    setEditTimerSeconds(30);
   }
 
   async function handleSaveEdit() {
@@ -113,6 +175,8 @@ function HostGameContent() {
         points: editPoints,
         multiplier: editMultiplier,
         isFillInBlank: editIsFillInBlank,
+        hasTimer: editHasTimer,
+        timerSeconds: editHasTimer ? editTimerSeconds : undefined,
       });
       handleCancelEdit();
       loadGame();
@@ -356,6 +420,17 @@ function HostGameContent() {
                   </span>
                 </div>
                 <p className="text-lg font-semibold text-slate-800">{currentQuestion.text}</p>
+                {currentQuestion.hasTimer && timeRemaining !== null && !game.answersRevealed && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className={`text-lg font-bold ${timeRemaining <= 10 ? 'text-red-600 animate-pulse' : 'text-orange-600'}`}>
+                      {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-sm text-slate-600">remaining</span>
+                  </div>
+                )}
               </div>
               
               {/* Answer Status */}
@@ -781,9 +856,40 @@ function HostGameContent() {
                 <option value={4}>4x</option>
               </select>
             </div>
-            <div className="flex-1"></div>
+          </div>
+          <div className="border-t-2 border-slate-200 pt-4 mt-4">
+            <div className="flex items-center gap-3 mb-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasTimer}
+                  onChange={(e) => setHasTimer(e.target.checked)}
+                  className="w-5 h-5 text-blue-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="text-sm font-semibold text-slate-700">Enable Timer</span>
+              </label>
+            </div>
+            {hasTimer && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Timer Duration (seconds)</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="600"
+                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  placeholder="e.g., 15 for 15 seconds, 120 for 2 minutes"
+                  value={timerSeconds}
+                  onChange={(e) => setTimerSeconds(Number(e.target.value) || 30)}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  {timerSeconds} second{timerSeconds !== 1 ? 's' : ''} ({Math.floor(timerSeconds / 60)}m {timerSeconds % 60}s)
+                </p>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end mt-4">
             <button
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2 mt-6"
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
               onClick={handleAddQuestion}
               disabled={!questionText || (!isFillInBlank && choices.some((c) => !c))}
             >
@@ -930,6 +1036,36 @@ function HostGameContent() {
                           <option value={4}>4x</option>
                         </select>
                       </div>
+                    </div>
+                    <div className="border-t-2 border-slate-200 pt-4 mt-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editHasTimer}
+                            onChange={(e) => setEditHasTimer(e.target.checked)}
+                            className="w-5 h-5 text-blue-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="text-sm font-semibold text-slate-700">Enable Timer</span>
+                        </label>
+                      </div>
+                      {editHasTimer && (
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">Timer Duration (seconds)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="600"
+                            className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                            placeholder="e.g., 15 for 15 seconds, 120 for 2 minutes"
+                            value={editTimerSeconds}
+                            onChange={(e) => setEditTimerSeconds(Number(e.target.value) || 30)}
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            {editTimerSeconds} second{editTimerSeconds !== 1 ? 's' : ''} ({Math.floor(editTimerSeconds / 60)}m {editTimerSeconds % 60}s)
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-3 pt-2">
                       <button
