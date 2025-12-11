@@ -72,30 +72,81 @@ function JoinForm() {
     }
   }
 
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="inline-block p-4 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg mb-4 animate-pulse">
+            <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <p className="text-slate-600">Checking session...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-8">
-      <h1 className="text-xl mb-4">Join a Game</h1>
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="max-w-md w-full">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-block p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg mb-4">
+            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+            </svg>
+          </div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2">
+            Join a Game
+          </h1>
+          <p className="text-slate-600">Enter the game code to start playing</p>
+        </div>
 
-      <input
-        className="border p-2"
-        placeholder="Game code"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-      />
+        {/* Form Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Game Code
+              </label>
+              <input
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all text-center text-2xl font-bold tracking-widest uppercase"
+                placeholder="ABCD"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                maxLength={6}
+                onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              />
+            </div>
 
-      <input
-        className="border p-2 ml-2"
-        placeholder="Your username"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Your Username
+              </label>
+              <input
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all"
+                placeholder="Enter your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+              />
+            </div>
 
-      <button
-        className="ml-2 px-4 py-2 bg-green-600 text-white rounded"
-        onClick={handleJoin}
-      >
-        Join
-      </button>
+            <button
+              className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2"
+              onClick={handleJoin}
+              disabled={!code || !name.trim()}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+              </svg>
+              Join Game
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

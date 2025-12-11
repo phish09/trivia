@@ -1,21 +1,69 @@
 "use server";
 
-import supabase from "@/lib/db";
+import { getSupabaseClient } from "@/lib/db";
 import { generateGameCode } from "@/lib/util";
 
 export async function createGame(hostName: string) {
-  const code = generateGameCode();
-  const { data, error } = await supabase
-    .from("games")
-    .insert({ code, host_name: hostName })
-    .select()
-    .single();
-  
-  if (error) throw new Error(error.message);
-  return data;
+  try {
+    const supabase = getSupabaseClient();
+    const code = generateGameCode();
+    const { data, error } = await supabase
+      .from("games")
+      .insert({ code, host_name: hostName })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error("Supabase error:", error);
+      throw new Error(error.message || `Failed to create game: ${JSON.stringify(error)}`);
+    }
+    return data;
+  } catch (error: any) {
+    console.error("createGame error:", error);
+    console.error("Error details:", {
+      name: error?.name,
+      message: error?.message,
+      cause: error?.cause,
+      stack: error?.stack,
+    });
+    
+    // Handle fetch errors specifically - check for TypeError or fetch failed message
+    const errorMessage = error?.message || error?.toString() || "";
+    const isFetchError = error instanceof TypeError || 
+                        errorMessage.includes("fetch failed") ||
+                        errorMessage.includes("Failed to fetch") ||
+                        error?.name === "TypeError";
+    
+    if (isFetchError) {
+      const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const actualUrl = envUrl || "https://lfmqhoijffrbmvadzamg.supabase.co";
+      const envStatus = envUrl ? "✅ Using URL from .env.local" : "⚠️ Using hardcoded default (env vars not loaded)";
+      
+      throw new Error(
+        `Failed to connect to Supabase database.\n\n` +
+        `${envStatus}\n` +
+        `Attempting to connect to: ${actualUrl}\n\n` +
+        `Please check:\n` +
+        `1. Your Supabase project is active (not paused) at ${actualUrl}\n` +
+        `2. Your internet connection is working\n` +
+        `3. Your .env.local file has the correct NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY\n` +
+        `4. You have restarted your Next.js dev server after updating .env.local\n` +
+        `5. Your Node.js version is compatible (try Node.js 18.15+)`
+      );
+    }
+    
+    // If it's already an Error with a message, re-throw it
+    if (error instanceof Error && error.message) {
+      throw error;
+    }
+    
+    // Otherwise, create a new error with the message or string representation
+    throw new Error(error?.message || error?.toString() || "Unknown error occurred");
+  }
 }
 
 export async function verifyPlayerSession(playerId: string, gameCode: string) {
+  const supabase = getSupabaseClient();
   const { data: game } = await supabase
     .from("games")
     .select("id")
@@ -35,6 +83,7 @@ export async function verifyPlayerSession(playerId: string, gameCode: string) {
 }
 
 export async function leaveGame(playerId: string) {
+  const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("players")
     .delete()
@@ -44,6 +93,7 @@ export async function leaveGame(playerId: string) {
 }
 
 export async function joinGame(code: string, username: string) {
+  const supabase = getSupabaseClient();
   const { data: game, error: gameError } = await supabase
     .from("games")
     .select("id")
@@ -68,7 +118,21 @@ export async function addQuestion(gameId: string, q: {
   answer: number;
   points: number;
   multiplier: number;
+  isFillInBlank?: boolean;
 }) {
+  const supabase = getSupabaseClient();
+  // Get the current max question_order for this game to add new question at the end
+  const { data: existingQuestions } = await supabase
+    .from("questions")
+    .select("question_order")
+    .eq("game_id", gameId)
+    .order("question_order", { ascending: false })
+    .limit(1);
+  
+  const nextOrder = existingQuestions && existingQuestions.length > 0 
+    ? (existingQuestions[0].question_order || 0) + 1 
+    : 0;
+  
   const { data, error } = await supabase
     .from("questions")
     .insert({
@@ -77,7 +141,9 @@ export async function addQuestion(gameId: string, q: {
       answer: q.answer,
       points: q.points,
       multiplier: q.multiplier,
+      is_fill_in_blank: q.isFillInBlank || false,
       game_id: gameId,
+      question_order: nextOrder,
     })
     .select()
     .single();
@@ -86,7 +152,55 @@ export async function addQuestion(gameId: string, q: {
   return data;
 }
 
+export async function updateQuestion(questionId: string, q: {
+  text: string;
+  choices: string[];
+  answer: number;
+  points: number;
+  multiplier: number;
+  isFillInBlank?: boolean;
+}) {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from("questions")
+    .update({
+      text: q.text,
+      choices: q.choices,
+      answer: q.answer,
+      points: q.points,
+      multiplier: q.multiplier,
+      is_fill_in_blank: q.isFillInBlank || false,
+    })
+    .eq("id", questionId)
+    .select()
+    .single();
+  
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function reorderQuestions(gameId: string, questionIds: string[]) {
+  const supabase = getSupabaseClient();
+  
+  // Update each question's question_order field to reflect the new order
+  for (let i = 0; i < questionIds.length; i++) {
+    const { error } = await supabase
+      .from("questions")
+      .update({ question_order: i })
+      .eq("id", questionIds[i])
+      .eq("game_id", gameId);
+    
+    if (error) {
+      console.error(`Failed to update question ${questionIds[i]}:`, error);
+      throw new Error(`Failed to reorder questions: ${error.message}`);
+    }
+  }
+  
+  return { success: true };
+}
+
 export async function getGame(code: string) {
+  const supabase = getSupabaseClient();
   // Cleanup old games before fetching (runs occasionally)
   // Only cleanup 1% of the time to avoid overhead
   if (Math.random() < 0.01) {
@@ -105,17 +219,17 @@ export async function getGame(code: string) {
   
   if (gameError || !game) throw new Error("Game not found");
 
-  // Check if game is older than 8 hours and delete it
+  // Check if game is older than 7 days and delete it
   const gameAge = Date.now() - new Date(game.created_at).getTime();
-  const eightHours = 8 * 60 * 60 * 1000;
+  const sevenDays = 7 * 24 * 60 * 60 * 1000;
   
-  if (gameAge > eightHours) {
+  if (gameAge > sevenDays) {
     // Game is too old, delete it
     await supabase
       .from("games")
       .delete()
       .eq("id", game.id);
-    throw new Error("Game has expired (older than 8 hours)");
+    throw new Error("Game has expired (older than 7 days)");
   }
 
   // Get player answers and scores
@@ -138,15 +252,24 @@ export async function getGame(code: string) {
     createdAt: game.created_at,
     currentQuestionIndex: game.current_question_index,
     answersRevealed: game.answers_revealed || false,
-    questions: (game.questions || []).map((q: any) => ({
-      id: q.id,
-      text: q.text,
-      choices: q.choices,
-      answer: q.answer,
-      points: q.points,
-      multiplier: q.multiplier || 1,
-      gameId: q.game_id,
-    })),
+    questions: (game.questions || [])
+      .sort((a: any, b: any) => {
+        // Sort by question_order field if available, otherwise by id as fallback
+        const orderA = a.question_order !== null && a.question_order !== undefined ? a.question_order : 999999;
+        const orderB = b.question_order !== null && b.question_order !== undefined ? b.question_order : 999999;
+        return orderA - orderB;
+      })
+      .map((q: any) => ({
+        id: q.id,
+        text: q.text,
+        choices: q.choices,
+        answer: q.answer,
+        points: q.points,
+        multiplier: q.multiplier || 1,
+        gameId: q.game_id,
+        questionOrder: q.question_order || 0,
+        isFillInBlank: q.is_fill_in_blank || false,
+      })),
     players: (playersWithScores || []).map((p: any) => ({
       id: p.id,
       username: p.username,
@@ -157,13 +280,16 @@ export async function getGame(code: string) {
       playerId: pa.player_id,
       questionId: pa.question_id,
       answerIndex: pa.answer_index,
+      textAnswer: pa.text_answer,
       isCorrect: pa.is_correct,
       pointsEarned: pa.points_earned,
+      manuallyScored: pa.manually_scored || false,
     })),
   };
 }
 
 export async function activateQuestion(gameId: string, questionIndex: number) {
+  const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("games")
     .update({ 
@@ -175,7 +301,8 @@ export async function activateQuestion(gameId: string, questionIndex: number) {
   if (error) throw new Error(error.message);
 }
 
-export async function submitAnswer(playerId: string, questionId: string, answerIndex: number) {
+export async function submitAnswer(playerId: string, questionId: string, answerIndex: number | null, textAnswer?: string) {
+  const supabase = getSupabaseClient();
   // Verify player exists
   const { data: player, error: playerError } = await supabase
     .from("players")
@@ -197,9 +324,13 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
 
   if (existing) {
     // Update existing answer
+    const updateData: any = {};
+    if (answerIndex !== null) updateData.answer_index = answerIndex;
+    if (textAnswer !== undefined) updateData.text_answer = textAnswer;
+    
     const { error } = await supabase
       .from("player_answers")
-      .update({ answer_index: answerIndex })
+      .update(updateData)
       .eq("id", existing.id);
     
     if (error) throw new Error(error.message);
@@ -207,18 +338,22 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
   }
 
   // Insert new answer
+  const insertData: any = {
+    player_id: playerId,
+    question_id: questionId,
+  };
+  if (answerIndex !== null) insertData.answer_index = answerIndex;
+  if (textAnswer !== undefined) insertData.text_answer = textAnswer;
+  
   const { error } = await supabase
     .from("player_answers")
-    .insert({
-      player_id: playerId,
-      question_id: questionId,
-      answer_index: answerIndex,
-    });
+    .insert(insertData);
   
   if (error) throw new Error(error.message);
 }
 
 export async function revealAnswers(gameId: string, questionId: string) {
+  const supabase = getSupabaseClient();
   // Get the question
   const { data: question } = await supabase
     .from("questions")
@@ -286,6 +421,7 @@ export async function revealAnswers(gameId: string, questionId: string) {
 }
 
 export async function nextQuestion(gameId: string, nextIndex: number) {
+  const supabase = getSupabaseClient();
   const { error } = await supabase
     .from("games")
     .update({
@@ -298,6 +434,7 @@ export async function nextQuestion(gameId: string, nextIndex: number) {
 }
 
 export async function resetQuestion(gameId: string, questionId: string) {
+  const supabase = getSupabaseClient();
   // Get all player answers for this question
   const { data: answers } = await supabase
     .from("player_answers")
@@ -360,6 +497,7 @@ export async function resetQuestion(gameId: string, questionId: string) {
 }
 
 export async function resetGame(gameId: string) {
+  const supabase = getSupabaseClient();
   // Reset all player scores to 0
   await supabase
     .from("players")
@@ -391,6 +529,7 @@ export async function resetGame(gameId: string) {
 }
 
 export async function endGame(gameId: string) {
+  const supabase = getSupabaseClient();
   // Delete the game - CASCADE will automatically delete players, questions, and player_answers
   const { error } = await supabase
     .from("games")
@@ -400,14 +539,56 @@ export async function endGame(gameId: string) {
   if (error) throw new Error(error.message);
 }
 
+export async function manuallyAwardPoints(playerId: string, questionId: string, points: number, isCorrect: boolean) {
+  const supabase = getSupabaseClient();
+  
+  // Get existing answer
+  const { data: answer } = await supabase
+    .from("player_answers")
+    .select("*")
+    .eq("player_id", playerId)
+    .eq("question_id", questionId)
+    .single();
+
+  if (!answer) throw new Error("Answer not found");
+
+  // Get current player score
+  const { data: player } = await supabase
+    .from("players")
+    .select("score")
+    .eq("id", playerId)
+    .single();
+
+  const currentScore = player?.score || 0;
+  const previousPoints = answer.points_earned || 0;
+  const newScore = currentScore - previousPoints + points;
+
+  // Update player answer with points and correct status
+  await supabase
+    .from("player_answers")
+    .update({
+      points_earned: points,
+      is_correct: isCorrect,
+      manually_scored: true,
+    })
+    .eq("id", answer.id);
+
+  // Update player score
+  await supabase
+    .from("players")
+    .update({ score: Math.max(0, newScore) })
+    .eq("id", playerId);
+}
+
 export async function cleanupOldGames() {
-  // Delete games older than 8 hours
-  const eightHoursAgo = new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString();
+  const supabase = getSupabaseClient();
+  // Delete games older than 7 days
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
   
   const { error } = await supabase
     .from("games")
     .delete()
-    .lt("created_at", eightHoursAgo);
+    .lt("created_at", sevenDaysAgo);
   
   if (error) {
     console.error("Failed to cleanup old games:", error);

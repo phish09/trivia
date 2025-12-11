@@ -11,6 +11,7 @@ function PlayPageContent() {
   const code = params.code as string;
   const [game, setGame] = useState<any>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [textAnswer, setTextAnswer] = useState<string>("");
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [verifying, setVerifying] = useState(true);
@@ -118,20 +119,37 @@ function PlayPageContent() {
             (pa: any) => pa.playerId === playerId && pa.questionId === currentQuestion.id
           );
           if (playerAnswer) {
-            setSelectedAnswer(playerAnswer.answerIndex);
+            // Player has submitted, use their submitted answer
+            if (currentQuestion.isFillInBlank) {
+              setTextAnswer(playerAnswer.textAnswer || "");
+            } else {
+              setSelectedAnswer(playerAnswer.answerIndex);
+            }
             setSubmitted(true);
           } else {
-            setSelectedAnswer(null);
-            setSubmitted(false);
+            // Player hasn't submitted yet
+            // Only reset if question changed (to preserve selection if same question)
+            if (questionChanged) {
+              if (currentQuestion.isFillInBlank) {
+                setTextAnswer("");
+              } else {
+                setSelectedAnswer(null);
+              }
+              setSubmitted(false);
+            }
+            // Otherwise, preserve the current answer state
+            // Don't reset it on every poll to prevent deselection
           }
         } else {
           // Question doesn't exist yet, reset state
           setSelectedAnswer(null);
+          setTextAnswer("");
           setSubmitted(false);
         }
       } else {
         // No active question, reset state
         setSelectedAnswer(null);
+        setTextAnswer("");
         setSubmitted(false);
       }
     } catch (error: any) {
@@ -182,10 +200,18 @@ function PlayPageContent() {
   }
 
   async function handleSubmitAnswer() {
-    if (selectedAnswer === null || !game || !playerId || submitted) return;
+    const currentQuestion = game?.questions[game.currentQuestionIndex];
+    if (!game || !playerId || submitted || !currentQuestion) return;
     
-    const currentQuestion = game.questions[game.currentQuestionIndex];
-    if (!currentQuestion) return;
+    // Validate answer based on question type
+    if (currentQuestion.isFillInBlank) {
+      if (!textAnswer.trim()) {
+        alert("Please enter an answer");
+        return;
+      }
+    } else {
+      if (selectedAnswer === null) return;
+    }
 
     // Verify player still exists before submitting
     const playerExists = game.players.some((p: any) => p.id === playerId);
@@ -198,7 +224,11 @@ function PlayPageContent() {
     }
 
     try {
-      await submitAnswer(playerId, currentQuestion.id, selectedAnswer);
+      if (currentQuestion.isFillInBlank) {
+        await submitAnswer(playerId, currentQuestion.id, null, textAnswer.trim());
+      } else {
+        await submitAnswer(playerId, currentQuestion.id, selectedAnswer);
+      }
       setSubmitted(true);
       // Refresh game state after submitting answer
       await loadGame();
@@ -240,33 +270,59 @@ function PlayPageContent() {
   }
 
   if (verifying || !game || !playerId) {
-    return <div className="p-8">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="text-center">
+          <div className="inline-block p-4 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl shadow-lg mb-4 animate-pulse">
+            <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <p className="text-slate-600 font-medium">Loading game...</p>
+        </div>
+      </div>
+    );
   }
 
   // No active question
   if (game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) {
     return (
-      <div className="p-8">
-        <div className="mb-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Game Code: {code}</h1>
-          <div className="flex gap-2">
-            <button
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-              onClick={loadGame}
-              title="Refresh game data"
-            >
-              🔄 Refresh
-            </button>
-            <button
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400"
-              onClick={handleLeaveGame}
-              disabled={leaving}
-            >
-              {leaving ? "Leaving..." : "Leave Game"}
-            </button>
+      <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200 text-center">
+            <div className="inline-block p-4 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl shadow-lg mb-6">
+              <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+              Game Code: {code}
+            </h1>
+            <p className="text-lg text-slate-600 mb-6">Waiting for host to start a question...</p>
+            <div className="flex justify-center gap-3">
+              <button
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
+                onClick={loadGame}
+                title="Refresh game data"
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </span>
+              </button>
+              <button
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl"
+                onClick={handleLeaveGame}
+                disabled={leaving}
+              >
+                {leaving ? "Leaving..." : "Leave Game"}
+              </button>
+            </div>
           </div>
         </div>
-        <p className="text-gray-600">Waiting for host to start a question...</p>
       </div>
     );
   }
@@ -311,96 +367,187 @@ function PlayPageContent() {
     const pointsEarned = playerAnswer?.pointsEarned || 0;
 
     return (
-      <div className="p-8">
-        <div className="mb-4 flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Game Code: {code}</h1>
-          <div className="flex items-center gap-2">
-            {currentPlayer && (
-              <div className="text-lg">
-                <span className="font-semibold">Your Score: {currentPlayer.score || 0}</span>
+      <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                  Game Code: {code}
+                </h1>
+                {currentPlayer && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full text-sm font-bold text-blue-700">
+                      Your Score: {currentPlayer.score || 0}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
+                  onClick={loadGame}
+                  title="Refresh game data"
+                >
+                  <span className="flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh
+                  </span>
+                </button>
+                <button
+                  className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl"
+                  onClick={handleLeaveGame}
+                  disabled={leaving}
+                >
+                  {leaving ? "Leaving..." : "Leave Game"}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Results Card */}
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">{currentQuestion.text}</h2>
+            
+            {playerAnswer ? (
+              <div className={`mb-6 p-6 rounded-xl border-2 ${
+                isCorrect 
+                  ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-300" 
+                  : "bg-gradient-to-r from-red-50 to-pink-50 border-red-300"
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  {isCorrect ? (
+                    <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </div>
+                  )}
+                  <div>
+                    <p className={`text-2xl font-bold ${isCorrect ? "text-green-700" : "text-red-700"}`}>
+                      {isCorrect ? "Correct!" : "Incorrect"}
+                    </p>
+                    {pointsEarned > 0 && (
+                      <p className="text-blue-600 font-bold text-lg mt-1">
+                        +{pointsEarned} points earned!
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <p className="text-slate-700">
+                    <span className="font-semibold">Your answer:</span> {currentQuestion.choices[playerAnswer.answerIndex]}
+                  </p>
+                  <p className="text-green-700 font-semibold">
+                    <span className="font-bold">Correct answer:</span> {currentQuestion.choices[currentQuestion.answer]}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-6 p-6 bg-slate-50 rounded-xl border-2 border-slate-200">
+                <p className="text-slate-600 font-medium">You didn't submit an answer for this question.</p>
               </div>
             )}
-            <button
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-              onClick={loadGame}
-              title="Refresh game data"
-            >
-              🔄 Refresh
-            </button>
-            <button
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400"
-              onClick={handleLeaveGame}
-              disabled={leaving}
-            >
-              {leaving ? "Leaving..." : "Leave Game"}
-            </button>
-          </div>
-        </div>
 
-        <div className="border p-6 rounded-lg mb-6">
-          <h2 className="text-xl font-semibold mb-4">{currentQuestion.text}</h2>
-          
-          {playerAnswer ? (
-            <div className="mb-4">
-              <p className={`text-lg font-semibold mb-2 ${isCorrect ? "text-green-600" : "text-red-600"}`}>
-                {isCorrect ? "✓ Correct!" : "✗ Incorrect"}
-              </p>
-              <p className="text-gray-600 mb-2">
-                Your answer: {currentQuestion.choices[playerAnswer.answerIndex]}
-              </p>
-              <p className="text-green-600 font-semibold">
-                Correct answer: {currentQuestion.choices[currentQuestion.answer]}
-              </p>
-              {pointsEarned > 0 && (
-                <p className="text-blue-600 font-semibold mt-2">
-                  Points earned: {pointsEarned}
-                </p>
-              )}
+            <div className="space-y-3 mb-6">
+              {currentQuestion.choices.map((choice: string, idx: number) => (
+                <div
+                  key={idx}
+                  className={`p-4 border-2 rounded-xl ${
+                    idx === currentQuestion.answer
+                      ? "bg-green-100 border-green-400"
+                      : idx === playerAnswer?.answerIndex
+                      ? "bg-red-100 border-red-400"
+                      : "bg-slate-50 border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                        idx === currentQuestion.answer ? "bg-green-500 text-white" :
+                        idx === playerAnswer?.answerIndex ? "bg-red-500 text-white" :
+                        "bg-slate-300 text-slate-600"
+                      }`}>
+                        {String.fromCharCode(65 + idx)}
+                      </div>
+                      <span className="font-medium">{choice}</span>
+                    </div>
+                    {idx === currentQuestion.answer && (
+                      <span className="px-3 py-1 bg-green-500 text-white rounded-full text-sm font-bold flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Correct
+                      </span>
+                    )}
+                    {idx === playerAnswer?.answerIndex && idx !== currentQuestion.answer && (
+                      <span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">
+                        Your answer
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
-          ) : (
-            <p className="text-gray-600 mb-4">You didn't submit an answer for this question.</p>
-          )}
 
-          <div className="space-y-2 mb-4">
-            {currentQuestion.choices.map((choice: string, idx: number) => (
-              <div
-                key={idx}
-                className={`p-4 border rounded ${
-                  idx === currentQuestion.answer
-                    ? "bg-green-100 border-green-400"
-                    : idx === playerAnswer?.answerIndex
-                    ? "bg-red-100 border-red-400"
-                    : "bg-gray-50"
-                }`}
-              >
-                {choice}
-                {idx === currentQuestion.answer && (
-                  <span className="ml-2 text-green-600 font-semibold">✓ Correct</span>
-                )}
-                {idx === playerAnswer?.answerIndex && idx !== currentQuestion.answer && (
-                  <span className="ml-2 text-red-600 font-semibold">Your answer</span>
-                )}
-              </div>
-            ))}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+              <p className="text-blue-800 font-semibold">
+                Waiting for host to continue to next question...
+              </p>
+            </div>
           </div>
 
-          <p className="text-sm text-gray-600 mb-4">
-            Waiting for host to continue to next question...
-          </p>
-        </div>
-
-        {/* Scoreboard */}
-        <div className="border p-6 rounded-lg bg-blue-50">
-          <h2 className="text-xl font-semibold mb-4">Scoreboard</h2>
-          <ol className="list-decimal list-inside space-y-2">
-            {sortedPlayers.map((player: any) => (
-              <li key={player.id} className={`text-lg ${
-                player.id === playerId ? "font-bold text-blue-600" : ""
-              }`}>
-                <span className="font-semibold">{player.username}</span>: {player.score || 0} points
-              </li>
-            ))}
-          </ol>
+          {/* Scoreboard */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-slate-800">Scoreboard</h2>
+            </div>
+            <div className="space-y-2">
+              {sortedPlayers.map((player: any, index: number) => (
+                <div 
+                  key={player.id} 
+                  className={`flex justify-between items-center p-4 rounded-xl ${
+                    player.id === playerId 
+                      ? "bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-300" 
+                      : index < 3
+                      ? "bg-slate-50 border border-slate-200"
+                      : "bg-slate-50 border border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                      index === 0 ? "bg-yellow-400 text-yellow-900" :
+                      index === 1 ? "bg-slate-400 text-white" :
+                      index === 2 ? "bg-orange-400 text-orange-900" :
+                      "bg-slate-300 text-slate-700"
+                    }`}>
+                      {index + 1}
+                    </span>
+                    <span className={`font-semibold ${player.id === playerId ? "text-blue-700" : "text-slate-700"}`}>
+                      {player.username}{index === 0 ? ' 👑' : ''}
+                    </span>
+                  </div>
+                  <span className={`font-bold text-lg ${player.id === playerId ? "text-blue-600" : "text-slate-600"}`}>
+                    {player.score || 0} pts
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -408,93 +555,171 @@ function PlayPageContent() {
 
   // Active question - players can answer
   return (
-    <div className="p-8">
-      <div className="mb-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Game Code: {code}</h1>
-        <div className="flex items-center gap-2">
-          {currentPlayer && (
-            <div className="text-lg">
-              <span className="font-semibold">Your Score: {currentPlayer.score || 0}</span>
+    <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 to-blue-50">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                Game Code: {code}
+              </h1>
+              {currentPlayer && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="px-3 py-1 bg-gradient-to-r from-blue-100 to-purple-100 rounded-full text-sm font-bold text-blue-700">
+                    Your Score: {currentPlayer.score || 0}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
+                onClick={loadGame}
+                title="Refresh game data"
+              >
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </span>
+              </button>
+              <button
+                className="px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl"
+                onClick={handleLeaveGame}
+                disabled={leaving}
+              >
+                {leaving ? "Leaving..." : "Leave Game"}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Question Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-bold">
+                Question {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
+              </span>
+              <div className="text-sm text-slate-600">
+                <span className="font-semibold">{currentQuestion.points} pts</span>
+                {currentQuestion.multiplier > 1 && (
+                  <span className="ml-2 px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">
+                    {currentQuestion.multiplier}x
+                  </span>
+                )}
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold text-slate-800 mb-6">{currentQuestion.text}</h2>
+          </div>
+
+          {currentQuestion.isFillInBlank ? (
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Your Answer</label>
+                <textarea
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
+                  rows={4}
+                  placeholder="Type your answer here..."
+                  value={textAnswer}
+                  onChange={(e) => setTextAnswer(e.target.value)}
+                  disabled={submitted}
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3 mb-6">
+              {currentQuestion.choices.map((choice: string, idx: number) => (
+                <button
+                  key={idx}
+                  className={`w-full text-left p-5 border-2 rounded-xl transition-all ${
+                    selectedAnswer === idx
+                      ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg scale-[1.02]"
+                      : submitted
+                      ? "bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                      : "bg-white border-slate-200 hover:border-blue-300 hover:bg-blue-50 hover:shadow-md"
+                  }`}
+                  onClick={() => handleAnswerSelect(idx)}
+                  disabled={submitted}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
+                      selectedAnswer === idx ? "bg-white text-blue-600" : "bg-slate-200 text-slate-600"
+                    }`}>
+                      {String.fromCharCode(65 + idx)}
+                    </div>
+                    <span className="font-medium">{choice}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
-          <button
-            className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-            onClick={loadGame}
-            title="Refresh game data"
-          >
-            🔄 Refresh
-          </button>
-          <button
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:bg-gray-400"
-            onClick={handleLeaveGame}
-            disabled={leaving}
-          >
-            {leaving ? "Leaving..." : "Leave Game"}
-          </button>
-        </div>
-      </div>
 
-      <div className="mb-4">
-        <p className="text-sm text-gray-600">
-          Question {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
-        </p>
-      </div>
-
-      <div className="border p-6 rounded-lg mb-6">
-        <h2 className="text-xl font-semibold mb-4">{currentQuestion.text}</h2>
-        <div className="space-y-3">
-          {currentQuestion.choices.map((choice: string, idx: number) => (
-            <button
-              key={idx}
-              className={`w-full text-left p-4 border rounded ${
-                selectedAnswer === idx
-                  ? "bg-blue-500 text-white border-blue-600"
-                  : submitted
-                  ? "bg-gray-100 cursor-not-allowed"
-                  : "bg-white hover:bg-gray-50"
-              }`}
-              onClick={() => handleAnswerSelect(idx)}
-              disabled={submitted}
-            >
-              {choice}
-            </button>
-          ))}
-        </div>
-        <div className="mt-4 flex items-center justify-between">
-          <p className="text-sm text-gray-600">
-            Points: {currentQuestion.points} | Multiplier: {currentQuestion.multiplier || 1}x
-            {currentQuestion.multiplier > 1 && (
-              <span className="ml-1 text-green-600 font-semibold">
-                (Max: {currentQuestion.points * (currentQuestion.multiplier || 1)})
-              </span>
-            )}
-          </p>
           {submitted ? (
-            <p className="text-gray-600">Answer submitted. Waiting for host to reveal results...</p>
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+              <p className="text-blue-800 font-semibold flex items-center justify-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Answer submitted. Waiting for host to reveal results...
+              </p>
+            </div>
           ) : (
             <button
-              className="px-6 py-2 bg-green-600 text-white rounded disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
               onClick={handleSubmitAnswer}
-              disabled={selectedAnswer === null}
+              disabled={currentQuestion.isFillInBlank ? !textAnswer.trim() : selectedAnswer === null}
             >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
               Submit Answer
             </button>
           )}
         </div>
-      </div>
 
-      {/* Scoreboard */}
-      <div className="border p-4 rounded-lg bg-blue-50">
-        <h2 className="text-lg font-semibold mb-3">Scoreboard</h2>
-        <ol className="list-decimal list-inside space-y-1">
-          {sortedPlayers.map((player: any) => (
-            <li key={player.id} className={`text-sm ${
-              player.id === playerId ? "font-bold text-blue-600" : ""
-            }`}>
-              <span className="font-semibold">{player.username}</span>: {player.score || 0} points
-            </li>
-          ))}
-        </ol>
+        {/* Scoreboard */}
+        <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-lg">
+              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
+            </div>
+            <h2 className="text-xl font-bold text-slate-800">Scoreboard</h2>
+          </div>
+          <div className="space-y-2">
+            {sortedPlayers.map((player: any, index: number) => (
+              <div 
+                key={player.id} 
+                className={`flex justify-between items-center p-3 rounded-xl ${
+                  player.id === playerId 
+                    ? "bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-300" 
+                    : "bg-slate-50 border border-slate-200"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                    index === 0 ? "bg-yellow-400 text-yellow-900" :
+                    index === 1 ? "bg-slate-400 text-white" :
+                    index === 2 ? "bg-orange-400 text-orange-900" :
+                    "bg-slate-300 text-slate-700"
+                  }`}>
+                    {index + 1}
+                  </span>
+                  <span className={`font-semibold ${player.id === playerId ? "text-blue-700" : "text-slate-700"}`}>
+                    {player.username}
+                  </span>
+                </div>
+                <span className={`font-bold ${player.id === playerId ? "text-blue-600" : "text-slate-600"}`}>
+                  {player.score || 0} pts
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
