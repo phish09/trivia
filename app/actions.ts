@@ -379,12 +379,62 @@ export async function revealAnswers(gameId: string, questionId: string) {
     return;
   }
 
-  // Calculate scores and update player answers
+  // For fill-in-the-blank questions, don't auto-score - host has already scored manually
+  // IMPORTANT: Do NOT update is_correct or points_earned for fill-in-the-blank questions
+  // These values were already set by manuallyAwardPoints and must be preserved
+  if (question.is_fill_in_blank) {
+    // For fill-in-the-blank questions, we need to ensure manually scored answers preserve their status
+    // We explicitly do NOT update is_correct or points_earned for manually_scored answers
+    // Only set defaults for answers that haven't been manually scored yet
+    for (const answer of answers) {
+      if (!answer.manually_scored) {
+        // If answer hasn't been manually scored, set default values (0 points, incorrect)
+        // This ensures all answers have a status when revealed
+        await supabase
+          .from("player_answers")
+          .update({
+            is_correct: false,
+            points_earned: 0,
+            manually_scored: false,
+          })
+          .eq("id", answer.id);
+      }
+      // If manually_scored is true, we explicitly do NOT touch is_correct or points_earned
+      // These were set by manuallyAwardPoints and must be preserved exactly as-is
+    }
+    
+    // Mark answers as revealed - manually scored answers keep their is_correct and points_earned values
+    // The is_correct boolean from manuallyAwardPoints is preserved and sent to players
+    const { error } = await supabase
+      .from("games")
+      .update({ answers_revealed: true })
+      .eq("id", gameId);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  // Calculate scores and update player answers (for multiple choice)
   for (const answer of answers) {
+    // Skip answers that have been manually scored (shouldn't happen for multiple choice, but just in case)
+    if (answer.manually_scored) {
+      continue;
+    }
+
     const isCorrect = answer.answer_index === question.answer;
     const pointsEarned = isCorrect 
       ? question.points * (question.multiplier || 1) 
       : 0;
+
+    // Get current player score
+    const { data: player } = await supabase
+      .from("players")
+      .select("score")
+      .eq("id", answer.player_id)
+      .single();
+
+    const currentScore = player?.score || 0;
+    const previousPoints = answer.points_earned || 0;
+    const newScore = currentScore - previousPoints + pointsEarned;
 
     // Update player answer
     await supabase
@@ -395,19 +445,10 @@ export async function revealAnswers(gameId: string, questionId: string) {
       })
       .eq("id", answer.id);
 
-    // Get current player score
-    const { data: player } = await supabase
-      .from("players")
-      .select("score")
-      .eq("id", answer.player_id)
-      .single();
-
-    const currentScore = player?.score || 0;
-    
     // Update player score
     await supabase
       .from("players")
-      .update({ score: currentScore + pointsEarned })
+      .update({ score: Math.max(0, newScore) })
       .eq("id", answer.player_id);
   }
 
@@ -564,14 +605,17 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
   const newScore = currentScore - previousPoints + points;
 
   // Update player answer with points and correct status
-  await supabase
+  // IMPORTANT: Explicitly set is_correct as a boolean (true/false), never null
+  const { error: updateError } = await supabase
     .from("player_answers")
     .update({
       points_earned: points,
-      is_correct: isCorrect,
+      is_correct: isCorrect === true, // Explicitly convert to boolean
       manually_scored: true,
     })
     .eq("id", answer.id);
+  
+  if (updateError) throw new Error(`Failed to update answer: ${updateError.message}`);
 
   // Update player score
   await supabase

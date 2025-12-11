@@ -363,7 +363,9 @@ function PlayPageContent() {
 
   // Answers revealed - show results and scoreboard
   if (game.answersRevealed) {
-    const isCorrect = playerAnswer?.isCorrect || false;
+    // For fill-in-the-blank questions, isCorrect should be explicitly set by the host
+    // If it's null/undefined, default to false (not scored yet)
+    const isCorrect = playerAnswer?.isCorrect === true; // Explicitly check for true, not just truthy
     const pointsEarned = playerAnswer?.pointsEarned || 0;
 
     return (
