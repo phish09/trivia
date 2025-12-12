@@ -297,6 +297,7 @@ export async function getGame(code: string) {
     createdAt: game.created_at,
     currentQuestionIndex: game.current_question_index,
     answersRevealed: game.answers_revealed || false,
+    gameEnded: game.game_ended || false,
     questions: (game.questions || [])
       .sort((a: any, b: any) => {
         // Sort by question_order field if available, otherwise by id as fallback
@@ -510,6 +511,37 @@ export async function revealAnswers(gameId: string, questionId: string) {
 
 export async function nextQuestion(gameId: string, nextIndex: number) {
   const supabase = getSupabaseClient();
+  
+  // Get total number of questions to check if we're past the last question
+  const { data: game } = await supabase
+    .from("games")
+    .select("id")
+    .eq("id", gameId)
+    .single();
+  
+  const { data: questions } = await supabase
+    .from("questions")
+    .select("id")
+    .eq("game_id", gameId)
+    .order("question_order", { ascending: true });
+  
+  const totalQuestions = questions?.length || 0;
+  
+  // If nextIndex is beyond the last question, mark game as ended
+  if (nextIndex >= totalQuestions) {
+    const { error } = await supabase
+      .from("games")
+      .update({
+        game_ended: true,
+        current_question_index: null,
+        answers_revealed: false,
+      })
+      .eq("id", gameId);
+    
+    if (error) throw new Error(error.message);
+    return;
+  }
+  
   const { error } = await supabase
     .from("games")
     .update({
@@ -618,10 +650,15 @@ export async function resetGame(gameId: string) {
 
 export async function endGame(gameId: string) {
   const supabase = getSupabaseClient();
-  // Delete the game - CASCADE will automatically delete players, questions, and player_answers
+  // Mark the game as ended instead of deleting it immediately
+  // This allows players to see the final scoreboard
   const { error } = await supabase
     .from("games")
-    .delete()
+    .update({
+      game_ended: true,
+      current_question_index: null,
+      answers_revealed: false,
+    })
     .eq("id", gameId);
   
   if (error) throw new Error(error.message);

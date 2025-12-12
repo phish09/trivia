@@ -190,11 +190,13 @@ function PlayPageContent() {
     // 2. Player has submitted answer and waiting for host to reveal
     // 3. Answers are revealed (waiting for host to move to next question)
     // 4. There's an active question (to catch when host activates a new question)
+    // 5. Game has ended (to catch when host ends the game)
     const shouldPoll = 
       !hasActiveQuestion || // Waiting for question to start
       (hasActiveQuestion && submitted && !game.answersRevealed) || // Waiting for answers to be revealed
       (hasActiveQuestion && game.answersRevealed) || // Waiting for next question
-      (hasActiveQuestion && !submitted); // Active question, player hasn't answered yet (catch new questions)
+      (hasActiveQuestion && !submitted) || // Active question, player hasn't answered yet (catch new questions)
+      game.gameEnded; // Game ended, keep polling to show endgame screen
 
     if (shouldPoll) {
       // Poll every 3 seconds when waiting for host actions
@@ -341,6 +343,118 @@ function PlayPageContent() {
             </svg>
           </div>
           <p className="text-slate-600 font-medium">Loading game...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Game ended - show endgame screen
+  if (game.gameEnded) {
+    const sortedPlayers = [...game.players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
+    const winner = sortedPlayers[0];
+    const currentPlayer = game.players.find((p: any) => p.id === playerId);
+    
+    return (
+      <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 to-blue-50">
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Header */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 text-center">
+            <div className="inline-block p-4 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-2xl shadow-lg mb-4">
+              <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+              </svg>
+            </div>
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-amber-600 bg-clip-text text-transparent mb-2">
+              Game Over!
+            </h1>
+            <p className="text-slate-600 text-lg">Thanks for playing!</p>
+          </div>
+
+          {/* Winner Card */}
+          {winner && (
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-2xl shadow-xl p-8 border-2 border-yellow-300">
+              <div className="text-center">
+                <div className="inline-block mb-4">
+                  <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-4xl">👑</span>
+                  </div>
+                </div>
+                <h2 className="text-3xl font-bold text-slate-800 mb-2">
+                  {winner.username}
+                </h2>
+                <p className="text-xl text-slate-600 mb-4">🍗 Winner winner. Chicken dinner. 🍗</p>
+                <div className="inline-block px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-500 rounded-xl shadow-lg">
+                  <span className="text-2xl font-bold text-white">
+                    {winner.score || 0} points
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Final Scoreboard */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-lg">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-slate-800">Final Scoreboard</h2>
+            </div>
+            <div className="space-y-3">
+              {sortedPlayers.map((player: any, index: number) => (
+                <div 
+                  key={player.id} 
+                  className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                    index === 0 
+                      ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-md' 
+                      : index === 1 
+                        ? 'bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300' 
+                        : index === 2 
+                          ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-300' 
+                          : 'bg-slate-50 border-slate-200'
+                  } ${player.id === playerId ? 'ring-2 ring-blue-400' : ''}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                      index === 0 
+                        ? 'bg-yellow-400 text-yellow-900' 
+                        : index === 1 
+                          ? 'bg-slate-400 text-white' 
+                          : index === 2 
+                            ? 'bg-orange-400 text-orange-900' 
+                            : 'bg-slate-300 text-slate-700'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div>
+                      <span className={`font-bold text-lg ${
+                        player.id === playerId ? 'text-blue-700' : 'text-slate-800'
+                      }`}>
+                        {player.username} {index === 0 && '👑'}
+                        {player.id === playerId && ' (You)'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                    {player.score || 0} pts
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Leave Game Button */}
+          <div className="text-center">
+            <button
+              className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
+              onClick={handleLeaveGame}
+              disabled={leaving}
+            >
+              {leaving ? "Leaving..." : "Leave Game"}
+            </button>
+          </div>
         </div>
       </div>
     );

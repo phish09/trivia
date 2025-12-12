@@ -323,10 +323,7 @@ function HostGameContent() {
   async function handleNextQuestion() {
     if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) return;
     const nextIndex = game.currentQuestionIndex + 1;
-    if (nextIndex >= game.questions.length) {
-      alert("All questions completed!");
-      return;
-    }
+    // nextQuestion will automatically mark game as ended if there are no more questions
     await nextQuestion(game.id, nextIndex);
     loadGame();
   }
@@ -361,14 +358,14 @@ function HostGameContent() {
 
   async function handleEndGame() {
     if (!game || ending) return;
-    const confirmed = window.confirm("Are you sure you want to end the game? This will permanently delete the game and all its data. Players will no longer be able to access it.\n\nThis cannot be undone!");
+    const confirmed = window.confirm("Are you sure you want to end the game? Players will see the final scoreboard.\n\nThe game will be marked as ended.");
     if (!confirmed) return;
 
     setEnding(true);
     try {
       await endGame(game.id);
-      // Redirect to home page after ending game
-      router.push("/");
+      loadGame(); // Reload to show ended state
+      setEnding(false);
     } catch (error) {
       console.error("Failed to end game:", error);
       alert("Failed to end game. Please try again.");
@@ -456,6 +453,23 @@ function HostGameContent() {
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-slate-50 to-blue-50">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Game Ended Banner */}
+        {game.gameEnded && (
+          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-2xl shadow-xl p-6">
+            <div className="flex items-center gap-4">
+              <div className="p-3 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-xl">
+                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold text-slate-800 mb-1">Game Ended</h2>
+                <p className="text-slate-600">Players can now see the final scoreboard. The winner is <span className="font-bold text-yellow-700">{sortedPlayers[0]?.username || "N/A"}</span> with <span className="font-bold text-yellow-700">{sortedPlayers[0]?.score || 0} points</span>!</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header Card */}
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
