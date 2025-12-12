@@ -644,6 +644,7 @@ export async function resetGame(gameId: string) {
     .update({
       current_question_index: null,
       answers_revealed: false,
+      game_ended: false, // Reset the game_ended flag so players can play again
     })
     .eq("id", gameId);
 }
