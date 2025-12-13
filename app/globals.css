@@ -31,9 +31,17 @@ body {
   min-height: 100vh;
 }
 
-/* Smooth scroll */
+/* Smooth scroll and force light mode - disable dark mode */
 html {
   scroll-behavior: smooth;
+  color-scheme: light;
+}
+
+/* Prevent dark mode from being applied */
+html.dark,
+html[data-theme="dark"],
+[data-theme="dark"] {
+  color-scheme: light;
 }
 
 /* Custom scrollbar */

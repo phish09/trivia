@@ -16,6 +16,7 @@ function HostGameContent() {
   const [points, setPoints] = useState(10);
   const [multiplier, setMultiplier] = useState(1);
   const [isFillInBlank, setIsFillInBlank] = useState(false);
+  const [isTrueFalse, setIsTrueFalse] = useState(false);
   const [hasTimer, setHasTimer] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(30);
   const [ending, setEnding] = useState(false);
@@ -26,6 +27,7 @@ function HostGameContent() {
   const [editPoints, setEditPoints] = useState(10);
   const [editMultiplier, setEditMultiplier] = useState(1);
   const [editIsFillInBlank, setEditIsFillInBlank] = useState(false);
+  const [editIsTrueFalse, setEditIsTrueFalse] = useState(false);
   const [editHasTimer, setEditHasTimer] = useState(false);
   const [editTimerSeconds, setEditTimerSeconds] = useState(30);
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
@@ -181,14 +183,15 @@ function HostGameContent() {
 
   async function handleAddQuestion() {
     if (!questionText || !game) return;
-    if (!isFillInBlank && choices.some((c) => !c)) return;
+    if (!isFillInBlank && !isTrueFalse && choices.some((c) => !c)) return;
     await addQuestion(game.id, {
       text: questionText,
-      choices: isFillInBlank ? [] : choices.filter((c) => c),
-      answer: isFillInBlank ? -1 : answer,
+      choices: isFillInBlank ? [] : isTrueFalse ? ["True", "False"] : choices.filter((c) => c),
+      answer: isFillInBlank ? -1 : isTrueFalse ? answer : answer,
       points,
       multiplier,
       isFillInBlank,
+      isTrueFalse,
       hasTimer,
       timerSeconds: hasTimer ? timerSeconds : undefined,
     });
@@ -198,6 +201,7 @@ function HostGameContent() {
     setPoints(10);
     setMultiplier(1);
     setIsFillInBlank(false);
+    setIsTrueFalse(false);
     setHasTimer(false);
     setTimerSeconds(30);
     loadGame();
@@ -216,6 +220,7 @@ function HostGameContent() {
     setEditPoints(question.points);
     setEditMultiplier(question.multiplier || 1);
     setEditIsFillInBlank(question.isFillInBlank || false);
+    setEditIsTrueFalse(question.isTrueFalse || false);
     setEditHasTimer(question.hasTimer || false);
     setEditTimerSeconds(question.timerSeconds || 30);
   }
@@ -228,21 +233,23 @@ function HostGameContent() {
     setEditPoints(10);
     setEditMultiplier(1);
     setEditIsFillInBlank(false);
+    setEditIsTrueFalse(false);
     setEditHasTimer(false);
     setEditTimerSeconds(30);
   }
 
   async function handleSaveEdit() {
     if (!editingQuestionId || !editQuestionText || !game) return;
-    if (!editIsFillInBlank && editChoices.some((c) => !c)) return;
+    if (!editIsFillInBlank && !editIsTrueFalse && editChoices.some((c) => !c)) return;
     try {
       await updateQuestion(editingQuestionId, {
         text: editQuestionText,
-        choices: editIsFillInBlank ? [] : editChoices.filter((c) => c),
-        answer: editIsFillInBlank ? -1 : editAnswer,
+        choices: editIsFillInBlank ? [] : editIsTrueFalse ? ["True", "False"] : editChoices.filter((c) => c),
+        answer: editIsFillInBlank ? -1 : editIsTrueFalse ? editAnswer : editAnswer,
         points: editPoints,
         multiplier: editMultiplier,
         isFillInBlank: editIsFillInBlank,
+        isTrueFalse: editIsTrueFalse,
         hasTimer: editHasTimer,
         timerSeconds: editHasTimer ? editTimerSeconds : undefined,
       });
@@ -506,7 +513,7 @@ function HostGameContent() {
                 <p className="text-sm text-slate-500 mt-2">Share this code with players to join</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-row md:flex-col gap-2">
               <button
                 className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm hover:shadow"
                 onClick={loadGame}
@@ -719,7 +726,11 @@ function HostGameContent() {
                   {!currentQuestion.isFillInBlank && (
                     <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
                       <p className="text-sm font-semibold text-green-700 mb-1">Correct Answer</p>
-                      <p className="text-lg font-bold text-green-800">{currentQuestion.choices[currentQuestion.answer]}</p>
+                      <p className="text-lg font-bold text-green-800">
+                        {currentQuestion.isTrueFalse 
+                          ? (currentQuestion.answer === 0 ? "True" : "False")
+                          : currentQuestion.choices[currentQuestion.answer]}
+                      </p>
                     </div>
                   )}
                   {currentQuestion.isFillInBlank && (
@@ -912,12 +923,15 @@ function HostGameContent() {
         <div className="space-y-5">
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Question Type</label>
-            <div className="flex gap-4">
+            <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
-                  checked={!isFillInBlank}
-                  onChange={() => setIsFillInBlank(false)}
+                  checked={!isFillInBlank && !isTrueFalse}
+                  onChange={() => {
+                    setIsFillInBlank(false);
+                    setIsTrueFalse(false);
+                  }}
                   className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="font-medium">Multiple Choice</span>
@@ -925,8 +939,24 @@ function HostGameContent() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="radio"
+                  checked={isTrueFalse}
+                  onChange={() => {
+                    setIsTrueFalse(true);
+                    setIsFillInBlank(false);
+                    setAnswer(0); // Default to True
+                  }}
+                  className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                />
+                <span className="font-medium">True or False</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
                   checked={isFillInBlank}
-                  onChange={() => setIsFillInBlank(true)}
+                  onChange={() => {
+                    setIsFillInBlank(true);
+                    setIsTrueFalse(false);
+                  }}
                   className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="font-medium">Fill in the Blank</span>
@@ -942,7 +972,7 @@ function HostGameContent() {
               onChange={(e) => setQuestionText(e.target.value)}
             />
           </div>
-          {!isFillInBlank && (
+          {!isFillInBlank && !isTrueFalse && (
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Answer Choices</label>
               <div className="space-y-3">
@@ -966,6 +996,31 @@ function HostGameContent() {
                     />
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+          {isTrueFalse && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Correct Answer</label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={answer === 0}
+                    onChange={() => setAnswer(0)}
+                    className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="font-medium text-lg">True</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    checked={answer === 1}
+                    onChange={() => setAnswer(1)}
+                    className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span className="font-medium text-lg">False</span>
+                </label>
               </div>
             </div>
           )}
@@ -1028,7 +1083,7 @@ function HostGameContent() {
             <button
               className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
               onClick={handleAddQuestion}
-              disabled={!questionText || (!isFillInBlank && choices.some((c) => !c))}
+              disabled={!questionText || (!isFillInBlank && !isTrueFalse && choices.some((c) => !c))}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -1092,12 +1147,15 @@ function HostGameContent() {
                     </h3>
                     <div>
                       <label className="block text-sm font-semibold text-slate-700 mb-2">Question Type</label>
-                      <div className="flex gap-4">
+                      <div className="flex flex-wrap gap-4">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="radio"
-                            checked={!editIsFillInBlank}
-                            onChange={() => setEditIsFillInBlank(false)}
+                            checked={!editIsFillInBlank && !editIsTrueFalse}
+                            onChange={() => {
+                              setEditIsFillInBlank(false);
+                              setEditIsTrueFalse(false);
+                            }}
                             className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
                           />
                           <span className="font-medium">Multiple Choice</span>
@@ -1105,8 +1163,24 @@ function HostGameContent() {
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input
                             type="radio"
+                            checked={editIsTrueFalse}
+                            onChange={() => {
+                              setEditIsTrueFalse(true);
+                              setEditIsFillInBlank(false);
+                              setEditAnswer(0); // Default to True
+                            }}
+                            className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span className="font-medium">True or False</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
                             checked={editIsFillInBlank}
-                            onChange={() => setEditIsFillInBlank(true)}
+                            onChange={() => {
+                              setEditIsFillInBlank(true);
+                              setEditIsTrueFalse(false);
+                            }}
                             className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
                           />
                           <span className="font-medium">Fill in the Blank</span>
@@ -1122,7 +1196,7 @@ function HostGameContent() {
                         onChange={(e) => setEditQuestionText(e.target.value)}
                       />
                     </div>
-                    {!editIsFillInBlank && (
+                    {!editIsFillInBlank && !editIsTrueFalse && (
                       <div>
                         <label className="block text-sm font-semibold text-slate-700 mb-2">Answer Choices</label>
                         <div className="space-y-3">
@@ -1146,6 +1220,31 @@ function HostGameContent() {
                               />
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    )}
+                    {editIsTrueFalse && (
+                      <div>
+                        <label className="block text-sm font-semibold text-slate-700 mb-2">Correct Answer</label>
+                        <div className="flex gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              checked={editAnswer === 0}
+                              onChange={() => setEditAnswer(0)}
+                              className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="font-medium text-lg">True</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              checked={editAnswer === 1}
+                              onChange={() => setEditAnswer(1)}
+                              className="w-5 h-5 text-blue-600 focus:ring-2 focus:ring-blue-500"
+                            />
+                            <span className="font-medium text-lg">False</span>
+                          </label>
                         </div>
                       </div>
                     )}

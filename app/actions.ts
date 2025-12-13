@@ -119,6 +119,7 @@ export async function addQuestion(gameId: string, q: {
   points: number;
   multiplier: number;
   isFillInBlank?: boolean;
+  isTrueFalse?: boolean;
   hasTimer?: boolean;
   timerSeconds?: number;
 }) {
@@ -142,6 +143,7 @@ export async function addQuestion(gameId: string, q: {
     points: q.points,
     multiplier: q.multiplier,
     is_fill_in_blank: q.isFillInBlank || false,
+    is_true_false: q.isTrueFalse || false,
     game_id: gameId,
     question_order: nextOrder,
     has_timer: q.hasTimer || false,
@@ -169,6 +171,7 @@ export async function updateQuestion(questionId: string, q: {
   points: number;
   multiplier: number;
   isFillInBlank?: boolean;
+  isTrueFalse?: boolean;
   hasTimer?: boolean;
   timerSeconds?: number;
 }) {
@@ -180,6 +183,7 @@ export async function updateQuestion(questionId: string, q: {
     points: q.points,
     multiplier: q.multiplier,
     is_fill_in_blank: q.isFillInBlank || false,
+    is_true_false: q.isTrueFalse || false,
     has_timer: q.hasTimer || false,
   };
   
@@ -315,6 +319,7 @@ export async function getGame(code: string) {
         gameId: q.game_id,
         questionOrder: q.question_order || 0,
         isFillInBlank: q.is_fill_in_blank || false,
+        isTrueFalse: q.is_true_false || false,
         hasTimer: q.has_timer || false,
         timerSeconds: q.timer_seconds || null,
       })),

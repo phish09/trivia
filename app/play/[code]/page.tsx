@@ -829,6 +829,63 @@ function PlayPageContent() {
                 />
               </div>
             </div>
+          ) : currentQuestion.isTrueFalse ? (
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <button
+                className={`p-6 border-2 rounded-xl transition-all ${
+                  selectedAnswer === 0
+                    ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white border-green-600 shadow-lg scale-[1.02]"
+                    : submitted
+                    ? "bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                    : "bg-white border-slate-200 hover:border-green-300 hover:bg-green-50 hover:shadow-md"
+                }`}
+                onClick={() => handleAnswerSelect(0)}
+                disabled={submitted}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl ${
+                    selectedAnswer === 0
+                      ? "bg-white text-green-600"
+                      : "bg-slate-200 text-slate-600"
+                  }`}>
+                    ✓
+                  </div>
+                  <span className="font-bold text-xl">True</span>
+                  {selectedAnswer === 0 && (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+              <button
+                className={`p-6 border-2 rounded-xl transition-all ${
+                  selectedAnswer === 1
+                    ? "bg-gradient-to-r from-red-500 to-rose-600 text-white border-red-600 shadow-lg scale-[1.02]"
+                    : submitted
+                    ? "bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                    : "bg-white border-slate-200 hover:border-red-300 hover:bg-red-50 hover:shadow-md"
+                }`}
+                onClick={() => handleAnswerSelect(1)}
+                disabled={submitted}
+              >
+                <div className="flex flex-col items-center gap-3">
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl ${
+                    selectedAnswer === 1
+                      ? "bg-white text-red-600"
+                      : "bg-slate-200 text-slate-600"
+                  }`}>
+                    ✗
+                  </div>
+                  <span className="font-bold text-xl">False</span>
+                  {selectedAnswer === 1 && (
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  )}
+                </div>
+              </button>
+            </div>
           ) : (
             <div className="space-y-3 mb-6">
               {currentQuestion.choices.map((choice: string, idx: number) => (
