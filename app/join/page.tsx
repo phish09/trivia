@@ -11,6 +11,7 @@ function JoinForm() {
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [checkingSession, setCheckingSession] = useState(true);
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     const codeParam = searchParams.get("code");
@@ -47,11 +48,11 @@ function JoinForm() {
   }
 
   async function handleJoin() {
-    if (!code || !name.trim()) {
-      alert("Please enter both game code and username");
+    if (!code || !name.trim() || joining) {
       return;
     }
 
+    setJoining(true);
     try {
       const player = await joinGame(code, name.trim());
       
@@ -68,6 +69,7 @@ function JoinForm() {
       
       router.push(`/play/${code}`);
     } catch (error: any) {
+      setJoining(false); // Re-enable button on error
       alert(error.message || "Failed to join game. Please try again.");
     }
   }
@@ -117,7 +119,7 @@ function JoinForm() {
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
                 maxLength={6}
-                onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+                onKeyDown={(e) => e.key === 'Enter' && !joining && handleJoin()}
               />
             </div>
 
@@ -130,19 +132,31 @@ function JoinForm() {
                 placeholder="Enter your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleJoin()}
+                onKeyDown={(e) => e.key === 'Enter' && !joining && handleJoin()}
               />
             </div>
 
             <button
-              className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2"
+              className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
               onClick={handleJoin}
-              disabled={!code || !name.trim()}
+              disabled={!code || !name.trim() || joining}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-              </svg>
-              Join Game
+              {joining ? (
+                <>
+                  <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Joining...
+                </>
+              ) : (
+                <>
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                  Join Game
+                </>
+              )}
             </button>
           </div>
         </div>
