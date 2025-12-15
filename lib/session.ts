@@ -72,3 +72,14 @@ export function updateSessionGameCode(gameCode: string) {
   }
 }
 
+/**
+ * Get all sessions (for checking any existing session)
+ */
+export function getAllSessions(): GameSession[] {
+  const session = getSession();
+  if (session) {
+    return [session];
+  }
+  return [];
+}
+

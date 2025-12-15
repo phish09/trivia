@@ -84,6 +84,13 @@ function getPlayerMappings(): Record<string, string> {
 }
 
 /**
+ * Get all player mappings (exported for use in join page)
+ */
+export function getAllPlayerMappings(): Record<string, string> {
+  return getPlayerMappings();
+}
+
+/**
  * Clear player mapping for a specific game
  */
 export function clearPlayerMapping(persistentPlayerId: string, gameCode: string) {

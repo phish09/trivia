@@ -5,3 +5,4 @@
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS has_timer BOOLEAN DEFAULT false;
 ALTER TABLE questions ADD COLUMN IF NOT EXISTS timer_seconds INTEGER;
 
+

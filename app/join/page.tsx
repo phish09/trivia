@@ -3,8 +3,9 @@
 import { joinGame, verifyPlayerSession } from "../actions";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
-import { getOrCreatePersistentPlayerId, getPlayerIdForGame, storePlayerMapping, clearPlayerMapping } from "@/lib/cookies";
+import { getSessionForGame, saveSession, clearSession, getAllSessions } from "@/lib/session";
+import { getOrCreatePersistentPlayerId, getPlayerIdForGame, storePlayerMapping, clearPlayerMapping, getAllPlayerMappings } from "@/lib/cookies";
+import Modal from "@/components/Modal";
 
 function JoinForm() {
   const router = useRouter();
@@ -13,6 +14,9 @@ function JoinForm() {
   const [name, setName] = useState("");
   const [checkingSession, setCheckingSession] = useState(true);
   const [joining, setJoining] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalMessage, setModalMessage] = useState("");
 
   useEffect(() => {
     const codeParam = searchParams.get("code");
@@ -20,9 +24,58 @@ function JoinForm() {
       setCode(codeParam);
       checkExistingSession(codeParam);
     } else {
-      setCheckingSession(false);
+      // Check for any existing session even without a code parameter
+      checkForAnyExistingSession();
     }
   }, [searchParams]);
+
+  async function checkForAnyExistingSession() {
+    try {
+      // Check cookie-based persistent player ID for any game mappings
+      const persistentPlayerId = getOrCreatePersistentPlayerId();
+      
+      // Get all player mappings from localStorage
+      const mappings = getAllPlayerMappings();
+      
+      // Try to find a valid session from any game
+      for (const [key, playerId] of Object.entries(mappings)) {
+        if (key.startsWith(`${persistentPlayerId}_`)) {
+          const gameCode = key.replace(`${persistentPlayerId}_`, '');
+          const player = await verifyPlayerSession(playerId, gameCode);
+          if (player) {
+            // Found a valid session, restore it
+            setName(player.username);
+            setCode(gameCode);
+            saveSession({
+              playerId: playerId,
+              gameCode: gameCode,
+              username: player.username,
+              timestamp: Date.now(),
+            });
+            router.push(`/play/${gameCode}`);
+            return;
+          }
+        }
+      }
+      
+      // Also check localStorage sessions
+      const allSessions = getAllSessions();
+      for (const session of allSessions) {
+        const player = await verifyPlayerSession(session.playerId, session.gameCode);
+        if (player) {
+          // Found a valid session, restore it
+          setName(session.username);
+          setCode(session.gameCode);
+          router.push(`/play/${session.gameCode}`);
+          return;
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check for existing sessions:", error);
+    } finally {
+      setCheckingSession(false);
+    }
+  }
 
   async function checkExistingSession(gameCode: string) {
     try {
@@ -106,7 +159,18 @@ function JoinForm() {
       router.push(`/play/${code}`);
     } catch (error: any) {
       setJoining(false); // Re-enable button on error
-      alert(error.message || "Failed to join game. Please try again.");
+      const errorMessage = error.message || "Failed to join game. Please try again.";
+      
+      // Check if it's a "game not found" error
+      if (errorMessage.toLowerCase().includes("game not found") || errorMessage.toLowerCase().includes("not found")) {
+        setModalTitle("Game Not Found");
+        setModalMessage(`The game code "${code}" was not found. Please check the code and try again.`);
+        setShowModal(true);
+      } else {
+        setModalTitle("Error");
+        setModalMessage(errorMessage);
+        setShowModal(true);
+      }
     }
   }
 
@@ -131,15 +195,10 @@ function JoinForm() {
       <div className="max-w-md w-full">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-block p-3 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-lg mb-4">
-            <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-            </svg>
-          </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent mb-2">
-            Join a Game
+          <h1 className="text-4xl font-bold text-white mb-2">
+            Join a game
           </h1>
-          <p className="text-slate-600">Enter the game code to start playing</p>
+          <p className="text-white">Enter the game code to start playing</p>
         </div>
 
         {/* Form Card */}
@@ -147,13 +206,20 @@ function JoinForm() {
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Game Code
+                Game code
               </label>
               <input
                 className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all text-center text-2xl font-bold tracking-widest uppercase"
-                placeholder="ABCD"
+                placeholder="A1B2C3"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                onChange={(e) => {
+                  const newCode = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                  setCode(newCode);
+                  // Check for existing session when code is entered
+                  if (newCode.length >= 4) {
+                    checkExistingSession(newCode);
+                  }
+                }}
                 maxLength={6}
                 onKeyDown={(e) => e.key === 'Enter' && !joining && handleJoin()}
               />
@@ -161,7 +227,7 @@ function JoinForm() {
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Your Username
+                Your name
               </label>
               <input
                 className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all"
@@ -173,7 +239,7 @@ function JoinForm() {
             </div>
 
             <button
-              className="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
+              className="w-full px-6 py-3 bg-fourth text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
               onClick={handleJoin}
               disabled={!code || !name.trim() || joining}
             >
@@ -187,16 +253,22 @@ function JoinForm() {
                 </>
               ) : (
                 <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                  Join Game
+                  Join game
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Modal */}
+      <Modal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        title={modalTitle}
+        message={modalMessage}
+        buttonText="OK"
+      />
     </div>
   );
 }

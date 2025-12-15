@@ -3,10 +3,22 @@
 :root {
   --background: #f8fafc;
   --foreground: #0f172a;
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --secondary: #10b981;
-  --secondary-hover: #059669;
+  
+  /* Brand Colors */
+  --primary: #663399;
+  --primary-hover: #5a2d87;
+  --secondary: #ba348d;
+  --secondary-hover: #a52d7a;
+  --tertiary: #f05274;
+  --tertiary-hover: #e63d62;
+  --fourth: #ff865d;
+  --fourth-hover: #ff7043;
+  --fifth: #ffbf54;
+  --fifth-hover: #ffb033;
+  --sixth: #f9f871;
+  --sixth-hover: #f7f65a;
+  
+  /* Legacy colors (keeping for compatibility) */
   --danger: #ef4444;
   --danger-hover: #dc2626;
   --warning: #f59e0b;
@@ -18,6 +30,20 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  
+  /* Brand Colors - Direct color values for Tailwind */
+  --color-primary: #663399;
+  --color-primary-hover: #5a2d87;
+  --color-secondary: #ba348d;
+  --color-secondary-hover: #a52d7a;
+  --color-tertiary: #f05274;
+  --color-tertiary-hover: #e63d62;
+  --color-fourth: #ff865d;
+  --color-fourth-hover: #ff7043;
+  --color-fifth: #ffbf54;
+  --color-fifth-hover: #ffb033;
+  --color-sixth: #f9f871;
+  --color-sixth-hover: #f7f65a;
 }
 
 * {
@@ -25,7 +51,6 @@
 }
 
 body {
-  background: linear-gradient(to bottom, #f8fafc 0%, #e2e8f0 100%);
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   min-height: 100vh;
@@ -86,10 +111,169 @@ html[data-theme="dark"],
   }
 }
 
+@keyframes gradient-flow {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
 .animate-fade-in {
   animation: fade-in 0.5s ease-out;
 }
 
 .animate-shake {
   animation: shake 0.5s ease-in-out;
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-pop-in {
+  animation: pop-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(20px, -20px) rotate(5deg);
+  }
+  50% {
+    transform: translate(-15px, 15px) rotate(-5deg);
+  }
+  75% {
+    transform: translate(10px, 10px) rotate(3deg);
+  }
+}
+
+.animate-float {
+  animation: float 20s ease-in-out infinite;
+}
+
+.animate-float-slow {
+  animation: float 30s ease-in-out infinite;
+}
+
+.animate-float-fast {
+  animation: float 15s ease-in-out infinite;
+}
+
+.animate-gradient-flow {
+  background: linear-gradient(
+    to bottom,
+    var(--primary) 0%,
+    var(--secondary) 16.66%,
+    var(--tertiary) 33.33%,
+    var(--fourth) 50%,
+    var(--fifth) 66.66%,
+    var(--sixth) 83.33%,
+    var(--primary) 100%
+  );
+  background-size: 100% 200%;
+  animation: gradient-flow 15s linear infinite;
+}
+
+/* Brand Gradient Utilities */
+.gradient-brand-primary {
+  background: linear-gradient(to right, var(--primary), var(--secondary));
+}
+
+.gradient-brand-secondary {
+  background: linear-gradient(to right, var(--secondary), var(--tertiary));
+}
+
+.gradient-brand-tertiary {
+  background: linear-gradient(to right, var(--tertiary), var(--fourth));
+}
+
+.gradient-brand-full {
+  background: linear-gradient(to right, var(--primary), var(--secondary), var(--tertiary), var(--fourth), var(--fifth), var(--sixth));
+}
+
+.gradient-brand-warm {
+  background: linear-gradient(to right, var(--tertiary), var(--fourth), var(--fifth), var(--sixth));
+}
+
+.gradient-brand-cool {
+  background: linear-gradient(to right, var(--primary), var(--secondary), var(--tertiary));
+}
+
+.gradient-brand-sunset {
+  background: linear-gradient(to right, var(--fourth), var(--fifth), var(--sixth));
+}
+
+/* Text gradient utilities */
+.text-gradient-brand-primary {
+  background: linear-gradient(to right, var(--primary), var(--secondary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.text-gradient-brand-full {
+  background: linear-gradient(to right, var(--primary), var(--secondary), var(--tertiary), var(--fourth), var(--fifth), var(--sixth));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.strikethrough-text {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 0.1rem 0;
+}
+
+.strikethrough-text::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background-color: currentColor;
+  opacity: 0.3;
+  z-index: 0;
+}
+
+.strikethrough-text span {
+  position: relative;
+  background-color: white;
+  padding: 0 1rem;
+  z-index: 1;
+}
+
+/* Style radio buttons and checkboxes to use primary color */
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--primary);
+  outline: none;
+}
+
+input[type="radio"]:focus,
+input[type="checkbox"]:focus {
+  outline: none;
+  box-shadow: none;
 }
