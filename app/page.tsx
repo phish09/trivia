@@ -2,15 +2,15 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="h-screen flex items-center justify-center p-2 overflow-hidden relative z-10">
-      <div className="max-w-md w-full space-y-8 overflow-visible relative z-10">
+    <main className="pt-12 md:pt-0 md:h-screen flex items-center justify-center p-2 overflow-hidden relative z-10">
+      <div className="max-w-md w-full overflow-visible relative z-10">
         {/* Hero Section */}
-        <div className="text-center space-y-4 animate-fade-in overflow-visible">
+        <div className="text-center animate-fade-in overflow-visible">
           <div className="pb-3 overflow-visible">
             <h1 className="sr-only">
               TriviYay!
             </h1>
-            <div className="animate-pop-in inline-block m-auto w-5/6">
+            <div className="animate-pop-in inline-block m-auto w-2/3 md:w-5/6">
               <svg width="100%" height="128" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
