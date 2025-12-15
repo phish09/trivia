@@ -4,6 +4,7 @@ import { joinGame, verifyPlayerSession } from "../actions";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
+import { getOrCreatePersistentPlayerId, getPlayerIdForGame, storePlayerMapping, clearPlayerMapping } from "@/lib/cookies";
 
 function JoinForm() {
   const router = useRouter();
@@ -25,6 +26,7 @@ function JoinForm() {
 
   async function checkExistingSession(gameCode: string) {
     try {
+      // First check localStorage session
       const session = getSessionForGame(gameCode);
       if (session) {
         // Verify session is still valid
@@ -37,6 +39,30 @@ function JoinForm() {
         } else {
           // Session invalid, clear it
           clearSession();
+        }
+      }
+      
+      // Check cookie-based persistent player ID
+      const persistentPlayerId = getOrCreatePersistentPlayerId();
+      const existingPlayerId = getPlayerIdForGame(persistentPlayerId, gameCode);
+      
+      if (existingPlayerId) {
+        // Verify player still exists
+        const player = await verifyPlayerSession(existingPlayerId, gameCode);
+        if (player) {
+          // Restore session from cookie-based mapping
+          setName(player.username);
+          saveSession({
+            playerId: existingPlayerId,
+            gameCode: gameCode,
+            username: player.username,
+            timestamp: Date.now(),
+          });
+          router.push(`/play/${gameCode}`);
+          return;
+        } else {
+          // Player doesn't exist anymore, clear mapping
+          clearPlayerMapping(persistentPlayerId, gameCode);
         }
       }
     } catch (error) {
@@ -54,7 +80,17 @@ function JoinForm() {
 
     setJoining(true);
     try {
-      const player = await joinGame(code, name.trim());
+      // Get or create persistent player ID from cookie
+      const persistentPlayerId = getOrCreatePersistentPlayerId();
+      
+      // Check if we have an existing player ID for this game
+      const existingPlayerId = getPlayerIdForGame(persistentPlayerId, code);
+      
+      // Join game (will restore existing player if found, or create new one)
+      const player = await joinGame(code, name.trim(), existingPlayerId);
+      
+      // Store the mapping for future sessions
+      storePlayerMapping(persistentPlayerId, code, player.id);
       
       // Save session
       saveSession({

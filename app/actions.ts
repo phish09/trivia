@@ -92,7 +92,17 @@ export async function leaveGame(playerId: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function joinGame(code: string, username: string) {
+export async function kickPlayer(playerId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("players")
+    .delete()
+    .eq("id", playerId);
+  
+  if (error) throw new Error(error.message);
+}
+
+export async function joinGame(code: string, username: string, existingPlayerId?: string | null) {
   const supabase = getSupabaseClient();
   const { data: game, error: gameError } = await supabase
     .from("games")
@@ -102,6 +112,28 @@ export async function joinGame(code: string, username: string) {
   
   if (gameError || !game) throw new Error("Game not found");
   
+  // If we have an existing player ID, verify they still exist in this game
+  if (existingPlayerId) {
+    const { data: existingPlayer } = await supabase
+      .from("players")
+      .select("id, username")
+      .eq("id", existingPlayerId)
+      .eq("game_id", game.id)
+      .single();
+    
+    if (existingPlayer) {
+      // Player exists, update username if it changed and return
+      if (existingPlayer.username !== username) {
+        await supabase
+          .from("players")
+          .update({ username })
+          .eq("id", existingPlayerId);
+      }
+      return { id: existingPlayer.id, username, game_id: game.id };
+    }
+  }
+  
+  // No existing player found, create new one
   const { data, error } = await supabase
     .from("players")
     .insert({ username, game_id: game.id })
@@ -122,6 +154,7 @@ export async function addQuestion(gameId: string, q: {
   isTrueFalse?: boolean;
   hasTimer?: boolean;
   timerSeconds?: number;
+  fillInBlankAnswer?: string;
 }) {
   const supabase = getSupabaseClient();
   // Get the current max question_order for this game to add new question at the end
@@ -154,6 +187,11 @@ export async function addQuestion(gameId: string, q: {
     insertData.timer_seconds = q.timerSeconds;
   }
   
+  // Set fill_in_blank_answer if provided
+  if (q.isFillInBlank && q.fillInBlankAnswer) {
+    insertData.fill_in_blank_answer = q.fillInBlankAnswer;
+  }
+  
   const { data, error } = await supabase
     .from("questions")
     .insert(insertData)
@@ -174,6 +212,7 @@ export async function updateQuestion(questionId: string, q: {
   isTrueFalse?: boolean;
   hasTimer?: boolean;
   timerSeconds?: number;
+  fillInBlankAnswer?: string;
 }) {
   const supabase = getSupabaseClient();
   const updateData: any = {
@@ -193,6 +232,14 @@ export async function updateQuestion(questionId: string, q: {
   } else if (!q.hasTimer) {
     // Clear timer_seconds if timer is disabled
     updateData.timer_seconds = null;
+  }
+  
+  // Set fill_in_blank_answer if fill-in-the-blank question
+  if (q.isFillInBlank && q.fillInBlankAnswer !== undefined) {
+    updateData.fill_in_blank_answer = q.fillInBlankAnswer || null;
+  } else if (!q.isFillInBlank) {
+    // Clear fill_in_blank_answer if not a fill-in-the-blank question
+    updateData.fill_in_blank_answer = null;
   }
   
   const { data, error } = await supabase
@@ -322,6 +369,7 @@ export async function getGame(code: string) {
         isTrueFalse: q.is_true_false || false,
         hasTimer: q.has_timer || false,
         timerSeconds: q.timer_seconds || null,
+        fillInBlankAnswer: q.fill_in_blank_answer || null,
       })),
     players: (playersWithScores || []).map((p: any) => ({
       id: p.id,
@@ -454,6 +502,30 @@ export async function revealAnswers(gameId: string, questionId: string) {
       }
       // If manually_scored is true, we explicitly do NOT touch is_correct or points_earned
       // These were set by manuallyAwardPoints and must be preserved exactly as-is
+    }
+    
+    // Now update player scores based on the points_earned values
+    // This is when scores should actually change for fill-in-the-blank questions
+    for (const answer of answers) {
+      const pointsEarned = answer.points_earned || 0;
+      
+      // Get current player score
+      const { data: player } = await supabase
+        .from("players")
+        .select("score")
+        .eq("id", answer.player_id)
+        .single();
+
+      const currentScore = player?.score || 0;
+      // For fill-in-the-blank, we add the points_earned (which was set by manuallyAwardPoints)
+      // Since this is the first time scores are being applied, we just add the points
+      const newScore = currentScore + pointsEarned;
+
+      // Update player score
+      await supabase
+        .from("players")
+        .update({ score: Math.max(0, newScore) })
+        .eq("id", answer.player_id);
     }
     
     // Mark answers as revealed - manually scored answers keep their is_correct and points_earned values
@@ -683,16 +755,21 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
 
   if (!answer) throw new Error("Answer not found");
 
-  // Get current player score
-  const { data: player } = await supabase
-    .from("players")
-    .select("score")
-    .eq("id", playerId)
+  // Get the question to check if answers are revealed
+  const { data: question } = await supabase
+    .from("questions")
+    .select("game_id, is_fill_in_blank")
+    .eq("id", questionId)
     .single();
 
-  const currentScore = player?.score || 0;
-  const previousPoints = answer.points_earned || 0;
-  const newScore = currentScore - previousPoints + points;
+  if (!question) throw new Error("Question not found");
+
+  // Get game to check if answers are revealed
+  const { data: game } = await supabase
+    .from("games")
+    .select("answers_revealed")
+    .eq("id", question.game_id)
+    .single();
 
   // Update player answer with points and correct status
   // IMPORTANT: Explicitly set is_correct as a boolean (true/false), never null
@@ -707,11 +784,26 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
   
   if (updateError) throw new Error(`Failed to update answer: ${updateError.message}`);
 
-  // Update player score
-  await supabase
-    .from("players")
-    .update({ score: Math.max(0, newScore) })
-    .eq("id", playerId);
+  // Only update player score if answers are already revealed
+  // For fill-in-the-blank questions, scores should only update when answers are revealed
+  if (game?.answers_revealed) {
+    // Get current player score
+    const { data: player } = await supabase
+      .from("players")
+      .select("score")
+      .eq("id", playerId)
+      .single();
+
+    const currentScore = player?.score || 0;
+    const previousPoints = answer.points_earned || 0;
+    const newScore = currentScore - previousPoints + points;
+
+    // Update player score
+    await supabase
+      .from("players")
+      .update({ score: Math.max(0, newScore) })
+      .eq("id", playerId);
+  }
 }
 
 export async function cleanupOldGames() {

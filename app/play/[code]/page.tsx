@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getGame, submitAnswer, verifyPlayerSession, leaveGame } from "../../actions";
 import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
+import { getOrCreatePersistentPlayerId, getPlayerIdForGame, clearPlayerMapping } from "@/lib/cookies";
 
 function PlayPageContent() {
   const params = useParams();
@@ -45,6 +46,27 @@ function PlayPageContent() {
           }
         }
 
+        // Check cookie-based persistent player ID
+        if (!pid) {
+          const persistentPlayerId = getOrCreatePersistentPlayerId();
+          const existingPlayerId = getPlayerIdForGame(persistentPlayerId, code);
+          
+          if (existingPlayerId) {
+            // Verify this player still exists
+            const player = await verifyPlayerSession(existingPlayerId, code);
+            if (player) {
+              pid = existingPlayerId;
+              // Create new session from cookie-based mapping
+              saveSession({
+                playerId: pid,
+                gameCode: code,
+                username: player.username,
+                timestamp: Date.now(),
+              });
+            }
+          }
+        }
+        
         // Fallback to old localStorage method for backward compatibility
         if (!pid) {
           pid = localStorage.getItem(`playerId_${code}`);
@@ -136,8 +158,9 @@ function PlayPageContent() {
             }
             setSubmitted(true);
           } else {
-            // Player hasn't submitted yet
-            // Only reset if question changed (to preserve selection if same question)
+            // Player hasn't submitted yet (or answer was reset)
+            // Only reset if question changed (to preserve selection during polling)
+            // This prevents deselection when loadGame runs on interval
             if (questionChanged) {
               if (currentQuestion.isFillInBlank) {
                 setTextAnswer("");
@@ -146,8 +169,8 @@ function PlayPageContent() {
               }
               setSubmitted(false);
             }
-            // Otherwise, preserve the current answer state
-            // Don't reset it on every poll to prevent deselection
+            // Otherwise, preserve the current answer state during polling
+            // This allows players to select an answer without it being deselected on each poll
           }
         } else {
           // Question doesn't exist yet, reset state
@@ -304,6 +327,11 @@ function PlayPageContent() {
         alert("Your player session has expired. Redirecting to join page...");
         clearSession();
         localStorage.removeItem(`playerId_${code}`);
+        
+        // Clear cookie-based player mapping for this game
+        const persistentPlayerId = getOrCreatePersistentPlayerId();
+        clearPlayerMapping(persistentPlayerId, code);
+        
         router.push(`/join?code=${code}`);
       } else {
         alert(errorMessage);
@@ -323,6 +351,11 @@ function PlayPageContent() {
       // Clear session
       clearSession();
       localStorage.removeItem(`playerId_${code}`);
+      
+      // Clear cookie-based player mapping for this game
+      const persistentPlayerId = getOrCreatePersistentPlayerId();
+      clearPlayerMapping(persistentPlayerId, code);
+      
       // Redirect to home
       router.push("/");
     } catch (error) {
@@ -359,13 +392,8 @@ function PlayPageContent() {
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 text-center">
-            <div className="inline-block p-4 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-2xl shadow-lg mb-4">
-              <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-              </svg>
-            </div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-amber-600 bg-clip-text text-transparent mb-2">
-              Game Over!
+              Game Over
             </h1>
             <p className="text-slate-600 text-lg">Thanks for playing!</p>
           </div>
@@ -382,7 +410,7 @@ function PlayPageContent() {
                 <h2 className="text-3xl font-bold text-slate-800 mb-2">
                   {winner.username}
                 </h2>
-                <p className="text-xl text-slate-600 mb-4">🍗 Winner winner. Chicken dinner. 🍗</p>
+                <p className="text-slate-800 mb-4">🍗 Winner winner. Chicken dinner! 🍗</p>
                 <div className="inline-block px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-500 rounded-xl shadow-lg">
                   <span className="text-2xl font-bold text-white">
                     {winner.score || 0} points
@@ -610,22 +638,27 @@ function PlayPageContent() {
                     </div>
                   )}
                   <div>
-                    <p className={`text-2xl font-bold ${isCorrect ? "text-green-700" : "text-red-700"}`}>
+                    <p className={`text-xl ${isCorrect ? "text-green-700" : "text-red-700"}`}>
                       {isCorrect ? "Correct!" : "Incorrect"}
                     </p>
                     {pointsEarned > 0 && (
-                      <p className="text-blue-600 font-bold text-lg mt-1">
-                        +{pointsEarned} points earned!
+                      <p className="text-blue-600 font-bold text-lg">
+                        +{pointsEarned} points
                       </p>
                     )}
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <p className="text-slate-700">
-                    <span className="font-semibold">Your answer:</span> {currentQuestion.choices[playerAnswer.answerIndex]}
-                  </p>
-                  <p className="text-green-700 font-semibold">
-                    <span className="font-bold">Correct answer:</span> {currentQuestion.choices[currentQuestion.answer]}
+                <div>
+                  <p className="text-green-800 font-semibold">
+                    <span className="uppercase text-xs tracking-wider">Correct answer:</span>{" "}
+                    <span className="font-bold text-slate-700">
+                      {currentQuestion.isTrueFalse 
+                          ? (currentQuestion.answer === 0 ? "True" : "False")
+                          : currentQuestion.isFillInBlank
+                          ? (currentQuestion.fillInBlankAnswer || "N/A")
+                          : currentQuestion.choices[currentQuestion.answer]
+                      }
+                    </span>
                   </p>
                 </div>
               </div>
@@ -678,7 +711,7 @@ function PlayPageContent() {
 
             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
               <p className="text-blue-800 font-semibold">
-                Waiting for host to continue to next question...
+                Waiting for host
               </p>
             </div>
           </div>
@@ -843,19 +876,16 @@ function PlayPageContent() {
                 disabled={submitted}
               >
                 <div className="flex flex-col items-center gap-3">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl ${
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
                     selectedAnswer === 0
-                      ? "bg-white text-green-600"
-                      : "bg-slate-200 text-slate-600"
+                      ? "bg-white"
+                      : "bg-slate-200"
                   }`}>
-                    ✓
+                    <svg className={`w-8 h-8 ${selectedAnswer === 0 ? "text-green-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                    </svg>
                   </div>
                   <span className="font-bold text-xl">True</span>
-                  {selectedAnswer === 0 && (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
                 </div>
               </button>
               <button
@@ -870,19 +900,16 @@ function PlayPageContent() {
                 disabled={submitted}
               >
                 <div className="flex flex-col items-center gap-3">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl ${
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
                     selectedAnswer === 1
-                      ? "bg-white text-red-600"
-                      : "bg-slate-200 text-slate-600"
+                      ? "bg-white"
+                      : "bg-slate-200"
                   }`}>
-                    ✗
+                    <svg className={`w-8 h-8 ${selectedAnswer === 1 ? "text-red-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
                   </div>
                   <span className="font-bold text-xl">False</span>
-                  {selectedAnswer === 1 && (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
                 </div>
               </button>
             </div>
@@ -916,11 +943,8 @@ function PlayPageContent() {
 
           {submitted ? (
             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
-              <p className="text-blue-800 font-semibold flex items-center justify-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                Answer submitted. Waiting for host to reveal results...
+              <p className="text-blue-800 font-semibold flex items-center justify-center gap-2 text-sm">
+                Answer submitted. Waiting for other players.
               </p>
             </div>
           ) : currentQuestion.hasTimer && timeRemaining === 0 ? (
@@ -934,17 +958,14 @@ function PlayPageContent() {
             </div>
           ) : (
             <button
-              className="w-full px-6 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+              className="w-full px-6 py-4 bg-emerald-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
               onClick={handleSubmitAnswer}
               disabled={
                 (currentQuestion.hasTimer && timeRemaining === 0) ||
                 (currentQuestion.isFillInBlank ? !textAnswer.trim() : selectedAnswer === null)
               }
             >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Submit Answer
+              Submit answer
             </button>
           )}
         </div>
@@ -979,7 +1000,7 @@ function PlayPageContent() {
                     {index + 1}
                   </span>
                   <span className={`font-semibold ${player.id === playerId ? "text-blue-700" : "text-slate-700"}`}>
-                    {player.username}
+                    {player.username}{index === 0 ? ' 👑' : ''}
                   </span>
                 </div>
                 <span className={`font-bold ${player.id === playerId ? "text-blue-600" : "text-slate-600"}`}>
