@@ -61,7 +61,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="light">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen bg-primary relative`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-primary relative`}
       >
         {/* Floating Background Shapes */}
         <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">

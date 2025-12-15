@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="pt-12 md:pt-0 md:h-screen flex items-center justify-center p-2 overflow-hidden relative z-10">
+    <main className="pt-12 md:pt-0 h-auto md:h-screen flex items-center justify-center p-4 relative z-10">
       <div className="max-w-md w-full overflow-visible relative z-10">
         {/* Hero Section */}
         <div className="text-center animate-fade-in overflow-visible">
