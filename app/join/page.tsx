@@ -209,11 +209,12 @@ function JoinForm() {
                 Game code
               </label>
               <input
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all text-center text-2xl font-bold tracking-widest uppercase"
-                placeholder="A1B2C3"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all text-center text-2xl font-bold tracking-widest"
+                placeholder="123456"
                 value={code}
+                inputMode="numeric"
                 onChange={(e) => {
-                  const newCode = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+                  const newCode = e.target.value.replace(/[^0-9]/g, '').slice(0, 6);
                   setCode(newCode);
                   // Check for existing session when code is entered
                   if (newCode.length >= 4) {
