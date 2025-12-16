@@ -716,7 +716,7 @@ function HostGameContent() {
             </div>
             
             {passwordError && (
-              <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+              <div className="p-4 bg-red-50 rounded-lg">
                 <p className="text-sm text-red-700">{passwordError}</p>
               </div>
             )}
