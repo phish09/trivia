@@ -1289,11 +1289,15 @@ function PlayPageContent() {
                   type="number"
                   min="0"
                   max={currentQuestion.maxWager || 10}
+                  step="1"
+                  inputMode="numeric"
                   className="w-32 px-4 py-2 bg-white border-2 border-slate-200 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 outline-none transition-all"
                   placeholder="0"
                   value={wager || ""}
                   onChange={(e) => {
-                    const value = Number(e.target.value) || 0;
+                    // Remove any non-digit characters and parse as integer
+                    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                    const value = rawValue === '' ? 0 : parseInt(rawValue, 10);
                     const maxWager = currentQuestion.maxWager || 10;
                     setWager(Math.max(0, Math.min(value, maxWager)));
                   }}
