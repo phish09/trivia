@@ -540,6 +540,23 @@ function PlayPageContent() {
     };
   }, [game?.gameEnded]);
 
+  // Helper function to wrap underscores with tighter letter-spacing
+  function formatQuestionText(text: string) {
+    // Split by underscores and wrap consecutive underscores in spans
+    const parts = text.split(/(_+)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith('_')) {
+        // This is a sequence of underscores - wrap in span with negative letter-spacing
+        return (
+          <span key={index} style={{ letterSpacing: '-0.1em' }}>
+            {part}
+          </span>
+        );
+      }
+      return part;
+    });
+  }
+
   async function handleAnswerSelect(answerIndex: number) {
     if (submitted || !game || !playerId) return;
     setSelectedAnswer(answerIndex);
@@ -903,7 +920,7 @@ function PlayPageContent() {
 
           {/* Results Card */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
+            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{formatQuestionText(currentQuestion.text)}</h2>
             
             {playerAnswer ? (
               <div className={`mb-6 p-6 rounded-xl border-2 ${
@@ -1192,7 +1209,7 @@ function PlayPageContent() {
                 )}
               </div>
             )}
-            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-2 md:px-12 text-center">{currentQuestion.text}</h2>
+            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-2 md:px-12 text-center">{formatQuestionText(currentQuestion.text)}</h2>
           </div>
 
           {currentQuestion.isFillInBlank ? (

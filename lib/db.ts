@@ -33,24 +33,6 @@ export function getSupabaseClient() {
   const currentUrl = getEnvVar("NEXT_PUBLIC_SUPABASE_URL", DEFAULT_SUPABASE_URL);
   const currentKey = getEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY", DEFAULT_SUPABASE_KEY);
   
-  // Check if env vars are loaded (in development)
-  if (process.env.NODE_ENV === "development") {
-    const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const envKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const usingEnvUrl = !!envUrl;
-    const usingEnvKey = !!envKey;
-    
-    if (!usingEnvUrl || !usingEnvKey) {
-      console.warn("⚠️  Environment variables not loaded from .env.local");
-      console.warn("⚠️  Using hardcoded defaults. Please restart your Next.js dev server!");
-      console.warn("⚠️  Expected URL from .env.local: https://lfmqhoijffrbmvadzamg.supabase.co");
-      console.warn("⚠️  Currently using: " + currentUrl);
-      console.warn("⚠️  All env vars:", Object.keys(process.env).filter(k => k.includes("SUPABASE")).join(", "));
-    } else {
-      console.log("✅ Using Supabase URL from .env.local:", currentUrl.substring(0, 30) + "...");
-    }
-  }
-  
   return createClient(currentUrl, currentKey, {
     auth: {
       persistSession: false,
