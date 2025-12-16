@@ -629,7 +629,7 @@ function PlayPageContent() {
 
   if (verifying || !game || !playerId) {
     return (
-      <div className="md:min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block p-6 bg-gradient-to-br from-tertiary to-fourth rounded-2xl shadow-lg mb-4 animate-pulse">
             <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
@@ -1185,7 +1185,7 @@ function PlayPageContent() {
                 )}
               </div>
             )}
-            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
+            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-2 md:px-12 text-center">{currentQuestion.text}</h2>
           </div>
 
           {currentQuestion.isFillInBlank ? (

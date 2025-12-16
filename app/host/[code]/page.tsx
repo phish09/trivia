@@ -600,7 +600,7 @@ function HostGameContent() {
 
   if (!game || !passwordVerified) {
     return (
-      <div className="md:min-h-screen flex items-center justify-center p-6">
+      <div className="min-h-screen flex items-center justify-center p-6">
         <div className="text-center">
           <div className="inline-block p-4 rounded-2xl shadow-lg mb-4 animate-pulse" style={{ background: 'linear-gradient(to bottom right, var(--fourth), var(--fourth-hover))' }}>
             <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
