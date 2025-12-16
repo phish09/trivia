@@ -1258,7 +1258,7 @@ function PlayPageContent() {
               {currentQuestion.choices.map((choice: string, idx: number) => (
                 <button
                   key={idx}
-                  className={`w-full text-sm md:text-lg text-left py-5 px-8 border-2 rounded-full transition-all ${
+                  className={`w-full text-sm md:text-lg text-left py-3 px-4 md:py-5 md:px-8 border-2 rounded-full transition-all ${
                     selectedAnswer === idx
                       ? "text-white border-secondary shadow-lg scale-[1.02]"
                       : submitted
