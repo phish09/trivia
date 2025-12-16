@@ -30,6 +30,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-fredoka: var(--font-fredoka);
   
   /* Brand Colors - Direct color values for Tailwind */
   --color-primary: #663399;
@@ -54,6 +55,12 @@ body {
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
   min-height: 100vh;
+}
+
+/* Apply Fredoka font to all headers */
+h1, h2, h3, h4, h5, h6 {
+  @apply font-medium;
+  font-family: var(--font-fredoka), sans-serif;
 }
 
 /* Smooth scroll and force light mode - disable dark mode */

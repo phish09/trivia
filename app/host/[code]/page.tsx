@@ -546,7 +546,7 @@ function HostGameContent() {
   // Show password prompt if password is required and not verified
   if (passwordPrompt && !passwordVerified) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="md:min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full">
           <div className="bg-white rounded-2xl shadow-xl p-6 space-y-6">
             <div className="text-center">
@@ -600,7 +600,7 @@ function HostGameContent() {
 
   if (!game || !passwordVerified) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="md:min-h-screen flex items-center justify-center p-6">
         <div className="text-center">
           <div className="inline-block p-4 rounded-2xl shadow-lg mb-4 animate-pulse" style={{ background: 'linear-gradient(to bottom right, var(--fourth), var(--fourth-hover))' }}>
             <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
@@ -621,7 +621,7 @@ function HostGameContent() {
   const sortedPlayers = [...game.players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
 
   return (
-    <div className="min-h-screen p-6">
+    <div className="md:min-h-screen p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Game Ended Banner */}
         {game.gameEnded && (

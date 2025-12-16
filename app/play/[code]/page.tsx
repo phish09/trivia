@@ -629,7 +629,7 @@ function PlayPageContent() {
 
   if (verifying || !game || !playerId) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="md:min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block p-6 bg-gradient-to-br from-tertiary to-fourth rounded-2xl shadow-lg mb-4 animate-pulse">
             <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
@@ -650,7 +650,7 @@ function PlayPageContent() {
     const currentPlayer = game.players.find((p: any) => p.id === playerId);
     
     return (
-      <div className="min-h-screen p-6 relative">
+      <div className="md:min-h-screen p-6 relative">
         <canvas
           ref={confettiCanvasRef}
           className="fixed top-0 left-0 w-full h-full pointer-events-none z-50"
@@ -753,7 +753,7 @@ function PlayPageContent() {
   // No active question
   if (game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) {
     return (
-      <div className="min-h-screen p-6">
+      <div className="md:min-h-screen p-6">
         <div className="max-w-4xl mx-auto">
         <div className="animate-pop-in block m-auto w-40 mb-6">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
@@ -787,7 +787,7 @@ function PlayPageContent() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
               Game code: {code}
             </h1>
-            <p className="text-lg text-slate-600 mb-6">Waiting for host to start a question...</p>
+            <p className="text-lg text-slate-600 mb-6">Waiting for {game?.hostName || 'host'} to start the game...</p>
             <div className="flex justify-center gap-3">
               <button
                 className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
@@ -857,7 +857,7 @@ function PlayPageContent() {
     const pointsEarned = playerAnswer?.pointsEarned || 0;
 
     return (
-      <div className="min-h-screen p-6">
+      <div className="md:min-h-screen p-6">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -896,7 +896,7 @@ function PlayPageContent() {
 
           {/* Results Card */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-            <h2 className="text-2xl font-bold text-slate-800 mb-6">{currentQuestion.text}</h2>
+            <h2 className="text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
             
             {playerAnswer ? (
               <div className={`mb-6 p-6 rounded-xl border-2 ${
@@ -994,7 +994,7 @@ function PlayPageContent() {
 
             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center">
               <p className="text-blue-800 font-semibold">
-                Waiting for host...
+                Waiting for {game?.hostName || 'host'}...
               </p>
             </div>
           </div>
@@ -1116,7 +1116,7 @@ function PlayPageContent() {
 
   // Active question - players can answer
   return (
-      <div className="min-h-screen p-6">
+      <div className="md:min-h-screen p-6">
       <div className="max-w-4xl mx-auto space-y-6">
       {/* Header with Logo and Question Indicator */}
       <div className="flex items-center justify-between mb-6">
@@ -1155,7 +1155,7 @@ function PlayPageContent() {
         {/* Question Card */}
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="mb-6">
-            <div className="flex items-center mb-4">
+            <div className="flex items-center justify-center mb-4">
               <div className="text-sm text-slate-600">
                 <span className="font-semibold text-emerald-600 bg-emerald-100 rounded-full px-3 py-1">{currentQuestion.points} pts</span>
                 {currentQuestion.multiplier > 1 && (
@@ -1185,7 +1185,7 @@ function PlayPageContent() {
                 )}
               </div>
             )}
-            <h2 className="text-2xl font-bold text-slate-800 mb-6">{currentQuestion.text}</h2>
+            <h2 className="text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
           </div>
 
           {currentQuestion.isFillInBlank ? (
@@ -1258,7 +1258,7 @@ function PlayPageContent() {
               {currentQuestion.choices.map((choice: string, idx: number) => (
                 <button
                   key={idx}
-                  className={`w-full text-left p-5 border-2 rounded-xl transition-all ${
+                  className={`w-full text-left py-5 px-8 border-2 rounded-full transition-all ${
                     selectedAnswer === idx
                       ? "text-white border-secondary shadow-lg scale-[1.02]"
                       : submitted

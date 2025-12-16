@@ -63,7 +63,7 @@ export default function Home() {
             Join a game
           </Link>
         </div>
-
+        <div className="flex justify-center gap-4 text-purple-300 py-6"><Link className="hover:text-white" href="/terms">Terms</Link><Link className="hover:text-white" href="/privacy">Privacy</Link></div>
       </div>
     </main>
   );
