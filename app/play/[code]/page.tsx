@@ -14,6 +14,7 @@ function PlayPageContent() {
   const [game, setGame] = useState<any>(null);
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [textAnswer, setTextAnswer] = useState<string>("");
+  const [wager, setWager] = useState<number>(0);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [verifying, setVerifying] = useState(true);
@@ -174,6 +175,7 @@ function PlayPageContent() {
               } else {
                 setSelectedAnswer(null);
               }
+              setWager(0);
               setSubmitted(false);
             }
             // Otherwise, preserve the current answer state during polling
@@ -183,12 +185,14 @@ function PlayPageContent() {
           // Question doesn't exist yet, reset state
           setSelectedAnswer(null);
           setTextAnswer("");
+          setWager(0);
           setSubmitted(false);
         }
       } else {
         // No active question, reset state
         setSelectedAnswer(null);
         setTextAnswer("");
+        setWager(0);
         setSubmitted(false);
       }
     } catch (error: any) {
@@ -482,10 +486,11 @@ function PlayPageContent() {
     }
 
     try {
+      const wagerAmount = currentQuestion.hasWager && wager > 0 ? wager : undefined;
       if (currentQuestion.isFillInBlank) {
-        await submitAnswer(playerId, currentQuestion.id, null, textAnswer.trim());
+        await submitAnswer(playerId, currentQuestion.id, null, textAnswer.trim(), wagerAmount);
       } else {
-        await submitAnswer(playerId, currentQuestion.id, selectedAnswer);
+        await submitAnswer(playerId, currentQuestion.id, selectedAnswer, undefined, wagerAmount);
       }
       setSubmitted(true);
       // Refresh game state after submitting answer
@@ -835,11 +840,19 @@ function PlayPageContent() {
                     <p className={`text-xl ${isCorrect ? "text-green-700" : "text-red-700"}`}>
                       {isCorrect ? "Correct!" : "Incorrect"}
                     </p>
-                    {pointsEarned > 0 && (
+                    {currentQuestion.hasWager && playerAnswer?.wager && playerAnswer.wager > 0 ? (
+                      <p className={`font-bold text-lg ${isCorrect ? "text-green-700" : "text-red-700"}`}>
+                        {isCorrect ? `+${pointsEarned}` : pointsEarned} points {isCorrect ? "(wagered)" : "(lost wager)"}
+                      </p>
+                    ) : pointsEarned > 0 ? (
                       <p className="text-tertiary font-bold text-lg">
                         +{pointsEarned} points
                       </p>
-                    )}
+                    ) : pointsEarned < 0 ? (
+                      <p className="text-red-700 font-bold text-lg">
+                        {pointsEarned} points
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div>
@@ -1184,6 +1197,42 @@ function PlayPageContent() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {currentQuestion.hasWager && !submitted && (
+            <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Wager (optional)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min="0"
+                  max={currentQuestion.maxWager || 10}
+                  className="w-32 px-4 py-2 bg-white border-2 border-slate-200 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 outline-none transition-all"
+                  placeholder="0"
+                  value={wager || ""}
+                  onChange={(e) => {
+                    const value = Number(e.target.value) || 0;
+                    const maxWager = currentQuestion.maxWager || 10;
+                    setWager(Math.max(0, Math.min(value, maxWager)));
+                  }}
+                  disabled={submitted}
+                />
+                <span className="text-sm text-slate-600">
+                  / {currentQuestion.maxWager || 10} max
+                </span>
+              </div>
+              <p className="text-xs text-slate-800 mt-2">
+                {wager > 0 ? (
+                  <>
+                    If correct: +{wager + (currentQuestion.points * (currentQuestion.multiplier || 1))} points ({wager} wager + {currentQuestion.points * (currentQuestion.multiplier || 1)} base). If wrong: -{wager} points.
+                  </>
+                ) : (
+                  "Bet points to potentially gain more (or lose if wrong)"
+                )}
+              </p>
             </div>
           )}
 

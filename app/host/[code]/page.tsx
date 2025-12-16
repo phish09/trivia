@@ -21,6 +21,8 @@ function HostGameContent() {
   const [hasTimer, setHasTimer] = useState(false);
   const [timerSeconds, setTimerSeconds] = useState(30);
   const [fillInBlankAnswer, setFillInBlankAnswer] = useState("");
+  const [hasWager, setHasWager] = useState(false);
+  const [maxWager, setMaxWager] = useState(10);
   const [ending, setEnding] = useState(false);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editQuestionText, setEditQuestionText] = useState("");
@@ -33,6 +35,8 @@ function HostGameContent() {
   const [editHasTimer, setEditHasTimer] = useState(false);
   const [editTimerSeconds, setEditTimerSeconds] = useState(30);
   const [editFillInBlankAnswer, setEditFillInBlankAnswer] = useState("");
+  const [editHasWager, setEditHasWager] = useState(false);
+  const [editMaxWager, setEditMaxWager] = useState(10);
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
@@ -208,6 +212,8 @@ function HostGameContent() {
       hasTimer,
       timerSeconds: hasTimer ? timerSeconds : undefined,
       fillInBlankAnswer: isFillInBlank ? fillInBlankAnswer : undefined,
+      hasWager,
+      maxWager: hasWager ? maxWager : undefined,
     });
     setQuestionText("");
     setChoices(["", "", "", ""]);
@@ -219,6 +225,8 @@ function HostGameContent() {
     setHasTimer(false);
     setTimerSeconds(30);
     setFillInBlankAnswer("");
+    setHasWager(false);
+    setMaxWager(10);
     loadGame();
   }
 
@@ -239,6 +247,8 @@ function HostGameContent() {
     setEditHasTimer(question.hasTimer || false);
     setEditTimerSeconds(question.timerSeconds || 30);
     setEditFillInBlankAnswer(question.fillInBlankAnswer || "");
+    setEditHasWager(question.hasWager || false);
+    setEditMaxWager(question.maxWager || 10);
   }
 
   function handleCancelEdit() {
@@ -253,6 +263,8 @@ function HostGameContent() {
     setEditHasTimer(false);
     setEditTimerSeconds(30);
     setEditFillInBlankAnswer("");
+    setEditHasWager(false);
+    setEditMaxWager(10);
   }
 
   async function handleSaveEdit() {
@@ -270,6 +282,8 @@ function HostGameContent() {
         hasTimer: editHasTimer,
         timerSeconds: editHasTimer ? editTimerSeconds : undefined,
         fillInBlankAnswer: editIsFillInBlank ? editFillInBlankAnswer : undefined,
+        hasWager: editHasWager,
+        maxWager: editHasWager ? editMaxWager : undefined,
       });
       handleCancelEdit();
       loadGame();
@@ -1285,6 +1299,35 @@ function HostGameContent() {
               </div>
             )}
           </div>
+          <div className="border-t-2 border-slate-200 pt-4 mt-4">
+            <div className="flex items-center gap-3 mb-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasWager}
+                  onChange={(e) => setHasWager(e.target.checked)}
+                  className="w-5 h-5 border-2 border-slate-300 rounded focus:ring-2 focus:ring-primary"
+                />
+                <span className="text-sm font-semibold text-slate-700">Enable wagering</span>
+              </label>
+            </div>
+            {hasWager && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Maximum wager (points)</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  placeholder="Maximum points players can wager"
+                  value={maxWager}
+                  onChange={(e) => setMaxWager(Number(e.target.value) || 10)}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Players can wager up to {maxWager} points. If correct, they gain the wager. If wrong, they lose it.
+                </p>
+              </div>
+            )}
+          </div>
           <div className="flex justify-end mt-4">
             <button
               className="px-6 py-3 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
@@ -1526,6 +1569,35 @@ function HostGameContent() {
                           />
                           <p className="text-xs text-slate-500 mt-1">
                             {editTimerSeconds} second{editTimerSeconds !== 1 ? 's' : ''} ({Math.floor(editTimerSeconds / 60)}m {editTimerSeconds % 60}s)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                    <div className="border-t-2 border-slate-200 pt-4 mt-4">
+                      <div className="flex items-center gap-3 mb-3">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editHasWager}
+                            onChange={(e) => setEditHasWager(e.target.checked)}
+                            className="w-5 h-5 border-2 border-slate-300 rounded focus:ring-2 focus:ring-primary"
+                          />
+                          <span className="text-sm font-semibold text-slate-700">Enable wagering</span>
+                        </label>
+                      </div>
+                      {editHasWager && (
+                        <div>
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">Maximum wager (points)</label>
+                          <input
+                            type="number"
+                            min="1"
+                            className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                            placeholder="Maximum points players can wager"
+                            value={editMaxWager}
+                            onChange={(e) => setEditMaxWager(Number(e.target.value) || 10)}
+                          />
+                          <p className="text-xs text-slate-500 mt-1">
+                            Players can wager up to {editMaxWager} points. If correct, they gain the wager. If wrong, they lose it.
                           </p>
                         </div>
                       )}

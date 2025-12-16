@@ -155,6 +155,8 @@ export async function addQuestion(gameId: string, q: {
   hasTimer?: boolean;
   timerSeconds?: number;
   fillInBlankAnswer?: string;
+  hasWager?: boolean;
+  maxWager?: number;
 }) {
   const supabase = getSupabaseClient();
   // Get the current max question_order for this game to add new question at the end
@@ -192,6 +194,14 @@ export async function addQuestion(gameId: string, q: {
     insertData.fill_in_blank_answer = q.fillInBlankAnswer;
   }
   
+  // Set wagering fields if provided
+  if (q.hasWager !== undefined) {
+    insertData.has_wager = q.hasWager;
+  }
+  if (q.hasWager && q.maxWager !== undefined) {
+    insertData.max_wager = q.maxWager;
+  }
+  
   const { data, error } = await supabase
     .from("questions")
     .insert(insertData)
@@ -213,6 +223,8 @@ export async function updateQuestion(questionId: string, q: {
   hasTimer?: boolean;
   timerSeconds?: number;
   fillInBlankAnswer?: string;
+  hasWager?: boolean;
+  maxWager?: number;
 }) {
   const supabase = getSupabaseClient();
   const updateData: any = {
@@ -240,6 +252,17 @@ export async function updateQuestion(questionId: string, q: {
   } else if (!q.isFillInBlank) {
     // Clear fill_in_blank_answer if not a fill-in-the-blank question
     updateData.fill_in_blank_answer = null;
+  }
+  
+  // Set wagering fields
+  if (q.hasWager !== undefined) {
+    updateData.has_wager = q.hasWager;
+  }
+  if (q.hasWager && q.maxWager !== undefined) {
+    updateData.max_wager = q.maxWager;
+  } else if (!q.hasWager) {
+    // Clear max_wager if wagering is disabled
+    updateData.max_wager = null;
   }
   
   const { data, error } = await supabase
@@ -370,6 +393,8 @@ export async function getGame(code: string) {
         hasTimer: q.has_timer || false,
         timerSeconds: q.timer_seconds || null,
         fillInBlankAnswer: q.fill_in_blank_answer || null,
+        hasWager: q.has_wager || false,
+        maxWager: q.max_wager || null,
       })),
     players: (playersWithScores || []).map((p: any) => ({
       id: p.id,
@@ -385,6 +410,7 @@ export async function getGame(code: string) {
       isCorrect: pa.is_correct,
       pointsEarned: pa.points_earned,
       manuallyScored: pa.manually_scored || false,
+      wager: pa.wager || null,
     })),
   };
 }
@@ -402,7 +428,7 @@ export async function activateQuestion(gameId: string, questionIndex: number) {
   if (error) throw new Error(error.message);
 }
 
-export async function submitAnswer(playerId: string, questionId: string, answerIndex: number | null, textAnswer?: string) {
+export async function submitAnswer(playerId: string, questionId: string, answerIndex: number | null, textAnswer?: string, wager?: number) {
   const supabase = getSupabaseClient();
   // Verify player exists
   const { data: player, error: playerError } = await supabase
@@ -428,6 +454,7 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
     const updateData: any = {};
     if (answerIndex !== null) updateData.answer_index = answerIndex;
     if (textAnswer !== undefined) updateData.text_answer = textAnswer;
+    if (wager !== undefined) updateData.wager = wager;
     
     const { error } = await supabase
       .from("player_answers")
@@ -445,6 +472,7 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
   };
   if (answerIndex !== null) insertData.answer_index = answerIndex;
   if (textAnswer !== undefined) insertData.text_answer = textAnswer;
+  if (wager !== undefined) insertData.wager = wager;
   
   const { error } = await supabase
     .from("player_answers")
@@ -521,10 +549,10 @@ export async function revealAnswers(gameId: string, questionId: string) {
       // Since this is the first time scores are being applied, we just add the points
       const newScore = currentScore + pointsEarned;
 
-      // Update player score
+      // Update player score (allow negative scores for wagering)
       await supabase
         .from("players")
-        .update({ score: Math.max(0, newScore) })
+        .update({ score: newScore })
         .eq("id", answer.player_id);
     }
     
@@ -546,9 +574,24 @@ export async function revealAnswers(gameId: string, questionId: string) {
     }
 
     const isCorrect = answer.answer_index === question.answer;
-    const pointsEarned = isCorrect 
-      ? question.points * (question.multiplier || 1) 
-      : 0;
+    const wagerAmount = answer.wager || 0;
+    const basePoints = question.points * (question.multiplier || 1);
+    
+    // Calculate points earned based on wagering
+    let pointsEarned = 0;
+    if (question.has_wager && wagerAmount > 0) {
+      // If wagering is enabled and player wagered
+      if (isCorrect) {
+        // Player gains the wager amount PLUS the normal points
+        pointsEarned = wagerAmount + basePoints;
+      } else {
+        // Player loses the wager amount (negative)
+        pointsEarned = -wagerAmount;
+      }
+    } else {
+      // Normal scoring without wagering
+      pointsEarned = isCorrect ? basePoints : 0;
+    }
 
     // Get current player score
     const { data: player } = await supabase
@@ -570,10 +613,10 @@ export async function revealAnswers(gameId: string, questionId: string) {
       })
       .eq("id", answer.id);
 
-    // Update player score
+    // Update player score (allow negative scores)
     await supabase
       .from("players")
-      .update({ score: Math.max(0, newScore) })
+      .update({ score: newScore })
       .eq("id", answer.player_id);
   }
 
@@ -650,7 +693,7 @@ export async function resetQuestion(gameId: string, questionId: string) {
           .single();
 
         const currentScore = player?.score || 0;
-        const newScore = Math.max(0, currentScore - answer.points_earned);
+        const newScore = currentScore - answer.points_earned;
         
         await supabase
           .from("players")
@@ -798,10 +841,10 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
     const previousPoints = answer.points_earned || 0;
     const newScore = currentScore - previousPoints + points;
 
-    // Update player score
+    // Update player score (allow negative scores for wagering)
     await supabase
       .from("players")
-      .update({ score: Math.max(0, newScore) })
+      .update({ score: newScore })
       .eq("id", playerId);
   }
 }
