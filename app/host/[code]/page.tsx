@@ -804,7 +804,7 @@ function HostGameContent() {
         )}
 
         {/* Header Card */}
-          <div className="flex justify-between">
+          <div className="flex flex-col md:flex-row justify-between">
           <div className="animate-pop-in inline-block w-36">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
@@ -834,7 +834,7 @@ function HostGameContent() {
             </svg>
             
         </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-2 items-center mt-4 md:mt-0">
               <button
                 className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm hover:shadow"
                 onClick={loadGame}
