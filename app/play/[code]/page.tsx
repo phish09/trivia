@@ -26,7 +26,7 @@ function PlayPageContent() {
   const previousQuestionIndexRef = useRef<number | null | undefined>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiAnimationRef = useRef<number | null>(null);
-  const confettiTriggeredRef = useRef<boolean>(false);
+  const previousGameEndedRef = useRef<boolean>(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
 
@@ -416,9 +416,16 @@ function PlayPageContent() {
 
   // Confetti effect for game over
   useEffect(() => {
-    if (!game?.gameEnded || confettiTriggeredRef.current) return;
-
-    confettiTriggeredRef.current = true;
+    const isGameEnded = game?.gameEnded || false;
+    
+    // Check if game just transitioned from not-ended to ended
+    const justEnded = isGameEnded && !previousGameEndedRef.current;
+    
+    // Update previous state
+    previousGameEndedRef.current = isGameEnded;
+    
+    // Only trigger confetti when game just ended
+    if (!justEnded) return;
     const canvas = confettiCanvasRef.current;
     if (!canvas) return;
 

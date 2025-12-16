@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams } from "next/navigation";
-import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer } from "../../actions";
+import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, deleteQuestion } from "../../actions";
 import { useRouter } from "next/navigation";
 import { getSupabaseClientForRealtime } from "@/lib/db";
 import Modal from "@/components/Modal";
@@ -46,6 +46,7 @@ function HostGameContent() {
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiAnimationRef = useRef<number | null>(null);
   const confettiTriggeredRef = useRef<boolean>(false);
+  const previousGameEndedRef = useRef<boolean>(false);
   const [passwordPrompt, setPasswordPrompt] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -58,7 +59,8 @@ function HostGameContent() {
     questions: false,
   });
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | null>(null);
+  const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | 'delete' | null>(null);
+  const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
 
   useEffect(() => {
@@ -289,19 +291,27 @@ function HostGameContent() {
 
   // Confetti effect for game over
   useEffect(() => {
-    if (!game?.gameEnded || confettiTriggeredRef.current) return;
+    const isGameEnded = game?.gameEnded || false;
+    
+    // Check if game just transitioned from not-ended to ended
+    const justEnded = isGameEnded && !previousGameEndedRef.current;
+    
+    // Update previous state
+    previousGameEndedRef.current = isGameEnded;
+    
+    // Only trigger confetti when game just ended
+    if (!justEnded) return;
 
-    confettiTriggeredRef.current = true;
-    const canvas = confettiCanvasRef.current;
-    if (!canvas) return;
+    const canvasElement = confettiCanvasRef.current;
+    if (!canvasElement) return;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvasElement.getContext('2d');
     if (!ctx) return;
 
     const resizeCanvas = () => {
-      if (canvas) {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+      if (canvasElement) {
+        canvasElement.width = window.innerWidth;
+        canvasElement.height = window.innerHeight;
       }
     };
     resizeCanvas();
@@ -323,8 +333,8 @@ function HostGameContent() {
 
     for (let i = 0; i < confettiCount; i++) {
       confetti.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height - canvas.height,
+        x: Math.random() * canvasElement.width,
+        y: Math.random() * canvasElement.height - canvasElement.height,
         r: Math.random() * 6 + 4,
         d: Math.random() * confettiCount,
         color: colors[Math.floor(Math.random() * colors.length)],
@@ -340,19 +350,19 @@ function HostGameContent() {
     const maxAnimationDuration = 15000; // Maximum animation duration (15 seconds to let all fall)
 
     function draw() {
-      if (!ctx || !canvas) return;
+      if (!ctx || !canvasElement) return;
       
       const currentTime = Date.now();
       const elapsed = currentTime - startTime;
       const stopCreatingNew = elapsed >= confettiCreationDuration;
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
       let activeCount = 0;
 
       confetti.forEach((conf) => {
         // Check if confetti is still on screen
-        const isOnScreen = conf.y <= canvas.height + conf.r && conf.x >= -conf.r && conf.x <= canvas.width + conf.r;
+        const isOnScreen = conf.y <= canvasElement.height + conf.r && conf.x >= -conf.r && conf.x <= canvasElement.width + conf.r;
         
         if (isOnScreen) {
           activeCount++;
@@ -372,13 +382,13 @@ function HostGameContent() {
 
         // Only reset confetti if we're still in the creation phase and it's off screen
         if (!stopCreatingNew && !isOnScreen) {
-          if (conf.y > canvas.height) {
-            conf.x = Math.random() * canvas.width;
+          if (conf.y > canvasElement.height) {
+            conf.x = Math.random() * canvasElement.width;
             conf.y = -conf.r;
             conf.tilt = Math.floor(Math.random() * 10) - 10;
             activeCount++;
-          } else if (conf.x < -conf.r || conf.x > canvas.width + conf.r) {
-            conf.x = Math.random() * canvas.width;
+          } else if (conf.x < -conf.r || conf.x > canvasElement.width + conf.r) {
+            conf.x = Math.random() * canvasElement.width;
             conf.y = -conf.r;
             activeCount++;
           }
@@ -389,7 +399,7 @@ function HostGameContent() {
       if (elapsed < maxAnimationDuration && activeCount > 0) {
         animationFrame = requestAnimationFrame(draw);
       } else {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       }
     }
 
@@ -507,6 +517,30 @@ function HostGameContent() {
     } catch (error) {
       console.error("Failed to update question:", error);
       alert("Failed to update question. Please try again.");
+    }
+  }
+
+  function handleDeleteQuestionClick(questionId: string) {
+    setQuestionToDelete(questionId);
+    setConfirmModalType('delete');
+    setShowConfirmModal(true);
+  }
+
+  async function handleDeleteQuestion() {
+    if (!questionToDelete || !game) return;
+    try {
+      await deleteQuestion(questionToDelete);
+      setShowConfirmModal(false);
+      setConfirmModalType(null);
+      setQuestionToDelete(null);
+      // Reload game to reflect the deletion
+      loadGame();
+    } catch (error) {
+      console.error("Failed to delete question:", error);
+      alert("Failed to delete question. Please try again.");
+      setShowConfirmModal(false);
+      setConfirmModalType(null);
+      setQuestionToDelete(null);
     }
   }
 
@@ -1890,11 +1924,20 @@ function HostGameContent() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        className="ml-4 px-3 py-1 bg-primary text-white rounded text-sm hover:bg-primary-hover"
+                        className="px-3 py-1 bg-primary text-white rounded text-sm hover:bg-primary-hover"
                         onClick={() => handleStartEdit(q)}
                         title="Edit this question"
                       >
                         Edit
+                      </button>
+                      <button
+                        className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 flex items-center justify-center"
+                        onClick={() => handleDeleteQuestionClick(q.id)}
+                        title="Delete this question"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
                       </button>
                     </div>
                   </div>
@@ -1915,19 +1958,22 @@ function HostGameContent() {
           setShowConfirmModal(false);
           setConfirmModalType(null);
         }}
-        title={confirmModalType === 'reset' ? 'Reset game' : 'End game'}
+        title={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete question' : 'End game'}
         message={
           confirmModalType === 'reset'
             ? 'Are you sure you want to reset the entire game? This will:\n• Reset all player scores to 0\n• Clear all answers\n• Reset game state\n\nThis cannot be undone!'
+            : confirmModalType === 'delete'
+            ? 'Are you sure you want to delete this question? This action cannot be undone.'
             : 'Are you sure you want to end the game? Players will see the final scoreboard.\n\nThe game will be marked as ended.'
         }
         isConfirmDialog={true}
-        confirmText={confirmModalType === 'reset' ? 'Reset game' : 'End game'}
+        confirmText={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete' : 'End game'}
         cancelText="Cancel"
-        onConfirm={confirmModalType === 'reset' ? handleResetGame : handleEndGame}
+        onConfirm={confirmModalType === 'reset' ? handleResetGame : confirmModalType === 'delete' ? handleDeleteQuestion : handleEndGame}
         onCancel={() => {
           setShowConfirmModal(false);
           setConfirmModalType(null);
+          setQuestionToDelete(null);
         }}
         showCloseButton={true}
       />

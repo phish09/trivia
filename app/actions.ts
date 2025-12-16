@@ -296,6 +296,17 @@ export async function reorderQuestions(gameId: string, questionIds: string[]) {
   return { success: true };
 }
 
+export async function deleteQuestion(questionId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("questions")
+    .delete()
+    .eq("id", questionId);
+  
+  if (error) throw new Error(error.message);
+  return { success: true };
+}
+
 export async function verifyHostPassword(code: string, password: string) {
   const supabase = getSupabaseClient();
   const { data: game, error } = await supabase
