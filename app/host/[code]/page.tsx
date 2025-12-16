@@ -796,8 +796,8 @@ function HostGameContent() {
                 </svg>
               </div>
               <div className="flex-1">
-                <h2 className="text-2xl font-bold text-slate-800 mb-1">Game Ended</h2>
-                <p className="text-slate-600">Players can now see the final scoreboard. The winner is <span className="font-bold text-yellow-700">{sortedPlayers[0]?.username || "N/A"}</span> with <span className="font-bold text-yellow-700">{sortedPlayers[0]?.score || 0} points</span>!</p>
+                <h2 className="text-2xl font-bold text-slate-800 mb-1">Game ended</h2>
+                <p className="text-slate-600">The winner is <span className="font-bold text-yellow-700">{sortedPlayers[0]?.username || "N/A"}</span> with <span className="font-bold text-yellow-700">{sortedPlayers[0]?.score || 0} points</span>!</p>
               </div>
             </div>
           </div>
@@ -1282,7 +1282,7 @@ function HostGameContent() {
       )}
 
       {/* Scoreboard */}
-      {game.answersRevealed && (
+      {(game.answersRevealed || game.gameEnded) && (
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-lg">
