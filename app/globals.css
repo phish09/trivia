@@ -284,3 +284,12 @@ input[type="checkbox"]:focus {
   outline: none;
   box-shadow: none;
 }
+
+/* Ensure crisp SVG rendering on mobile devices */
+svg {
+  shape-rendering: geometricPrecision;
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
