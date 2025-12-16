@@ -706,13 +706,13 @@ function HostGameContent() {
         <div className="max-w-md w-full">
           <div className="bg-white rounded-2xl shadow-xl p-6 space-y-6">
             <div className="text-center">
-              <div className="inline-block p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg mb-4">
+              <div className="inline-block p-3 bg-gradient-to-br from-primary to-secondary rounded-xl shadow-lg mb-4">
                 <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
               </div>
-              <h1 className="text-2xl font-bold text-slate-800 mb-2">Host Password Required</h1>
-              <p className="text-slate-600">Enter the password to access host controls for game code: <span className="font-bold text-blue-600">{code}</span></p>
+              <h1 className="text-2xl font-bold text-slate-800 mb-2">Host password required</h1>
+              <p className="text-slate-600">Enter the password to access host controls for game: <span className="font-bold text-primary text-2xl">{code}</span></p>
             </div>
             
             {passwordError && (
@@ -727,8 +727,8 @@ function HostGameContent() {
               </label>
               <input
                 type="password"
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                placeholder="Enter host password"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
+                placeholder="Enter password"
                 value={passwordInput}
                 onChange={(e) => {
                   setPasswordInput(e.target.value);
@@ -740,13 +740,10 @@ function HostGameContent() {
             </div>
             
             <button
-              className="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2"
+              className="w-full px-6 py-3 bg-gradient-to-br from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2"
               onClick={handlePasswordSubmit}
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-              Verify Password
+              Verify password
             </button>
           </div>
         </div>
