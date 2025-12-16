@@ -544,7 +544,7 @@ function PlayPageContent() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block p-4 bg-gradient-to-br from-tertiary to-fourth rounded-2xl shadow-lg mb-4 animate-pulse">
+          <div className="inline-block p-6 bg-gradient-to-br from-tertiary to-fourth rounded-2xl shadow-lg mb-4 animate-pulse">
             <svg className="w-12 h-12 text-white animate-spin" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -580,7 +580,7 @@ function PlayPageContent() {
 
           {/* Winner Card */}
           {winner && (
-            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-2xl shadow-xl p-8 border-2 border-yellow-300">
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-2xl shadow-xl p-6 border-2 border-yellow-300">
               <div className="text-center">
                 <div className="inline-block mb-4">
                   <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-lg">
@@ -609,7 +609,7 @@ function PlayPageContent() {
               {sortedPlayers.map((player: any, index: number) => (
                 <div 
                   key={player.id} 
-                  className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
+                  className={`flex items-center justify-between p-6 rounded-xl border-2 transition-all ${
                     index === 0 
                       ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-md' 
                       : index === 1 
@@ -619,7 +619,7 @@ function PlayPageContent() {
                           : 'bg-slate-50 border-slate-200'
                   } ${player.id === playerId ? 'ring-2 ring-blue-400' : ''}`}
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-6">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
                       index === 0 
                         ? 'bg-yellow-400 text-yellow-900' 
@@ -696,7 +696,7 @@ function PlayPageContent() {
             </defs>
             </svg>
         </div>
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200 text-center">
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 text-center">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
               Game code: {code}
             </h1>
@@ -731,7 +731,7 @@ function PlayPageContent() {
   const currentQuestion = game.questions[game.currentQuestionIndex];
   if (!currentQuestion) {
     return (
-      <div className="p-8">
+      <div className="p-6">
         <div className="mb-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">Game code: {code}</h1>
           <div className="flex gap-2">
@@ -774,7 +774,7 @@ function PlayPageContent() {
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-        <div className="animate-pop-in inline-block w-40">
+        <div className="animate-pop-in inline-block w-36">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -808,7 +808,7 @@ function PlayPageContent() {
       </div>
 
           {/* Results Card */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
             <h2 className="text-2xl font-bold text-slate-800 mb-6">{currentQuestion.text}</h2>
             
             {playerAnswer ? (
@@ -866,7 +866,7 @@ function PlayPageContent() {
               {currentQuestion.choices.map((choice: string, idx: number) => (
                 <div
                   key={idx}
-                  className={`p-4 border-2 rounded-xl ${
+                  className={`p-6 border-2 rounded-xl ${
                     idx === currentQuestion.answer
                       ? "bg-green-100 border-green-400"
                       : idx === playerAnswer?.answerIndex
@@ -876,13 +876,6 @@ function PlayPageContent() {
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                        idx === currentQuestion.answer ? "bg-green-500 text-white" :
-                        idx === playerAnswer?.answerIndex ? "bg-red-500 text-white" :
-                        "bg-slate-300 text-slate-600"
-                      }`}>
-                        {String.fromCharCode(65 + idx)}
-                      </div>
                       <span className="font-medium">{choice}</span>
                     </div>
                     {idx === currentQuestion.answer && (
@@ -904,7 +897,7 @@ function PlayPageContent() {
               ))}
             </div>
 
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center">
               <p className="text-blue-800 font-semibold">
                 Waiting for host...
               </p>
@@ -920,7 +913,7 @@ function PlayPageContent() {
               {sortedPlayers.map((player: any, index: number) => (
                 <div 
                   key={player.id} 
-                  className={`flex justify-between items-center p-4 rounded-xl ${
+                  className={`flex justify-between items-center p-6 rounded-xl ${
                     player.id === playerId 
                       ? "bg-gradient-to-r from-blue-50 to-purple-50 border-2 border-blue-300" 
                       : index < 3
@@ -951,7 +944,7 @@ function PlayPageContent() {
 
           {/* Game Code */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
               <p className="text-sm font-semibold text-slate-600 mb-1">Game code</p>
               <div className="flex items-center gap-3">
                 <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-wider">
@@ -1032,7 +1025,7 @@ function PlayPageContent() {
       <div className="max-w-4xl mx-auto space-y-6">
       {/* Header with Logo and Question Indicator */}
       <div className="flex items-center justify-between mb-6">
-        <div className="animate-pop-in inline-block w-40">
+        <div className="animate-pop-in inline-block w-36">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -1060,18 +1053,18 @@ function PlayPageContent() {
             </defs>
             </svg>
         </div>
-        <div className="px-3 py-1 bg-purple-100 text-primary rounded-full text-sm font-bold">
+        <div className="px-3 py-1 bg-white/60 text-primary rounded-full text-sm font-bold">
           Question {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
         </div>
       </div>
         {/* Question Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-slate-200">
+        <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="mb-6">
-            <div className="flex items-center justify-end mb-4">
+            <div className="flex items-center mb-4">
               <div className="text-sm text-slate-600">
                 <span className="font-semibold text-emerald-600 bg-emerald-100 rounded-full px-3 py-1">{currentQuestion.points} pts</span>
                 {currentQuestion.multiplier > 1 && (
-                  <span className="ml-2 px-2 py-1 bg-green-100 text-green-700 rounded-full font-bold">
+                  <span className="ml-2 px-2 py-1 bg-tertiary text-white rounded-full font-bold">
                     {currentQuestion.multiplier}x
                   </span>
                 )}
@@ -1118,7 +1111,7 @@ function PlayPageContent() {
               </div>
             </div>
           ) : currentQuestion.isTrueFalse ? (
-            <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-6 mb-6">
               <button
                 className={`p-6 border-2 rounded-xl transition-all ${
                   selectedAnswer === 0
@@ -1187,13 +1180,6 @@ function PlayPageContent() {
                   disabled={submitted}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold ${
-                      selectedAnswer === idx ? "bg-white" : "bg-slate-200 text-slate-600"
-                    }`}
-                    style={selectedAnswer === idx ? { color: 'var(--secondary)' } : {}}
-                    >
-                      {String.fromCharCode(65 + idx)}
-                    </div>
                     <span className="font-medium">{choice}</span>
                   </div>
                 </button>
@@ -1202,13 +1188,13 @@ function PlayPageContent() {
           )}
 
           {submitted ? (
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-center">
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center">
               <p className="text-blue-800 font-semibold flex items-center justify-center gap-2 text-sm">
                 Answer submitted. Waiting for other players.
               </p>
             </div>
           ) : currentQuestion.hasTimer && timeRemaining === 0 ? (
-            <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 text-center">
+            <div className="bg-red-50 border-2 border-red-300 rounded-xl p-6 text-center">
               <p className="text-red-800 font-bold text-lg flex items-center justify-center gap-2">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1272,8 +1258,8 @@ function PlayPageContent() {
         </div>
 
         {/* Game Code */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
+        <div className="rounded-2xl">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
             <p className="text-sm font-semibold text-slate-600 mb-1">Game code</p>
             <div className="flex items-center gap-3">
               <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-wider">
@@ -1356,7 +1342,7 @@ function PlayPageContent() {
 export default function PlayPage() {
   return (
     <Suspense fallback={
-      <div className="p-8">
+      <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">Game</h1>
         <p>Loading...</p>
       </div>

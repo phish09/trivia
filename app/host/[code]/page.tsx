@@ -439,7 +439,7 @@ function HostGameContent() {
     return (
       <div className="min-h-screen flex items-center justify-center p-6">
         <div className="max-w-md w-full">
-          <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+          <div className="bg-white rounded-2xl shadow-xl p-6 space-y-6">
             <div className="text-center">
               <div className="inline-block p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg mb-4">
                 <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -533,7 +533,7 @@ function HostGameContent() {
 
         {/* Header Card */}
           <div className="flex justify-between">
-          <div className="animate-pop-in inline-block w-40">
+          <div className="animate-pop-in inline-block w-36">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
           <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -679,7 +679,7 @@ function HostGameContent() {
                       ? (currentQuestion.fillInBlankAnswer || "N/A")
                       : currentQuestion.isTrueFalse
                       ? (currentQuestion.answer === 0 ? "True" : "False")
-                      : `${String.fromCharCode(65 + currentQuestion.answer)}. ${currentQuestion.choices[currentQuestion.answer]}`}
+                      : currentQuestion.choices[currentQuestion.answer]}
                   </span>
                 </div>
                 {currentQuestion.hasTimer && !game.answersRevealed && (
@@ -1628,7 +1628,7 @@ function HostGameContent() {
 export default function HostGamePage() {
   return (
     <Suspense fallback={
-      <div className="p-8">
+      <div className="p-6">
         <h1 className="text-2xl font-bold mb-4">Host game</h1>
         <p>Loading...</p>
       </div>
