@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer } from "../../actions";
 import { useRouter } from "next/navigation";
+import { getSupabaseClientForRealtime } from "@/lib/db";
 import Modal from "@/components/Modal";
 
 function HostGameContent() {
@@ -125,27 +126,89 @@ function HostGameContent() {
     }
   }
 
-  // Poll for updates when there's an active question waiting for players to answer
+  // Set up Supabase Realtime subscription for instant updates
+  useEffect(() => {
+    if (!game?.id) return;
+
+    const supabase = getSupabaseClientForRealtime();
+    
+    // Subscribe to changes in the games table for this specific game
+    const channel = supabase
+      .channel(`game-${game.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'games',
+          filter: `id=eq.${game.id}`,
+        },
+        (payload) => {
+          // Game state changed, reload game data
+          loadGame();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'player_answers',
+          filter: game.questions && game.questions.length > 0 
+            ? `question_id=in.(${game.questions.map((q: any) => q.id).join(',')})`
+            : undefined,
+        },
+        () => {
+          // Player answers changed, reload game data
+          loadGame();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'players',
+          filter: `game_id=eq.${game.id}`,
+        },
+        () => {
+          // Players changed (joined/left), reload game data
+          loadGame();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.warn('⚠️ Realtime subscription error, falling back to polling');
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [game?.id]);
+
+  // Poll for updates when there's an active question waiting for players to answer (fallback if realtime fails)
   useEffect(() => {
     if (!game) return;
 
     const hasActiveQuestion = game.currentQuestionIndex !== null && game.currentQuestionIndex !== undefined;
     
     // Poll when there's an active question and answers haven't been revealed yet
-    // This allows host to see when players submit answers
+    // This allows host to see when players submit answers (fallback if realtime fails)
     const shouldPoll = hasActiveQuestion && !game.answersRevealed;
 
     if (shouldPoll) {
-      // Poll every 3 seconds to check for new player answers
+      // Poll every 3 seconds to check for new player answers (fallback)
       const interval = setInterval(loadGame, 3000);
       return () => clearInterval(interval);
     }
   }, [game]);
 
-  // Timer countdown logic
+  // Timer countdown logic - using server-provided time
   useEffect(() => {
     if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) {
-      setQuestionStartTime(null);
       setTimeRemaining(null);
       currentQuestionIdRef.current = null;
       return;
@@ -153,41 +216,73 @@ function HostGameContent() {
 
     const currentQuestion = game.questions[game.currentQuestionIndex];
     if (!currentQuestion || !currentQuestion.hasTimer || game.answersRevealed) {
-      setQuestionStartTime(null);
       setTimeRemaining(null);
       currentQuestionIdRef.current = null;
       return;
     }
 
-    // Initialize start time when question changes (track by question ID)
+    // Initialize timer when question changes
     if (currentQuestionIdRef.current !== currentQuestion.id) {
-      const startTime = Date.now();
-      setQuestionStartTime(startTime);
-      setTimeRemaining(currentQuestion.timerSeconds);
       currentQuestionIdRef.current = currentQuestion.id;
-    }
-
-    // Update timer every second
-    const interval = setInterval(() => {
-      setQuestionStartTime((prevStartTime) => {
-        if (prevStartTime === null || !currentQuestion.timerSeconds) {
-          setTimeRemaining(null);
-          return prevStartTime;
-        }
-        
-        const elapsed = Math.floor((Date.now() - prevStartTime) / 1000);
+      // ALWAYS use server-calculated time if available
+      if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
+        setTimeRemaining(game.timeRemaining);
+      } else if (game.questionStartTime && currentQuestion.timerSeconds) {
+        // Fallback: calculate client-side from question_start_time if server hasn't calculated yet
+        const startTime = new Date(game.questionStartTime).getTime();
+        const now = Date.now();
+        const elapsed = Math.floor((now - startTime) / 1000);
         const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
         setTimeRemaining(remaining);
+      } else {
+        // Wait for server to provide time - don't start a fresh timer
+        setTimeRemaining(null);
+      }
+    } else {
+      // Question hasn't changed - sync with server time if available
+      if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
+        setTimeRemaining(game.timeRemaining);
+      }
+    }
+  }, [game?.timeRemaining, game?.currentQuestionIndex, game?.answersRevealed]);
 
-        if (remaining === 0) {
-          clearInterval(interval);
+  // Separate effect for countdown interval - only runs when timeRemaining is set
+  useEffect(() => {
+    if (timeRemaining === null || timeRemaining <= 0) {
+      return;
+    }
+
+    // Sync with server more frequently (every 2 seconds) to keep in sync
+    const syncInterval = setInterval(() => {
+      if (game?.timeRemaining !== null && game?.timeRemaining !== undefined) {
+        // Always sync with server - it's the source of truth
+        setTimeRemaining(game.timeRemaining);
+      } else if (game?.questionStartTime && game?.questions?.[game.currentQuestionIndex]?.timerSeconds) {
+        // Fallback: recalculate from question_start_time
+        const currentQuestion = game.questions[game.currentQuestionIndex];
+        const startTime = new Date(game.questionStartTime).getTime();
+        const now = Date.now();
+        const elapsed = Math.floor((now - startTime) / 1000);
+        const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
+        setTimeRemaining(remaining);
+      }
+    }, 2000); // Sync every 2 seconds
+
+    // Countdown interval - decrement every second
+    const countdownInterval = setInterval(() => {
+      setTimeRemaining((prev) => {
+        if (prev !== null && prev > 0) {
+          return prev - 1;
         }
-        return prevStartTime;
+        return prev;
       });
     }, 1000);
 
-    return () => clearInterval(interval);
-  }, [game?.currentQuestionIndex ?? null, game?.answersRevealed ?? false]);
+    return () => {
+      clearInterval(syncInterval);
+      clearInterval(countdownInterval);
+    };
+  }, [timeRemaining, game?.timeRemaining, game?.questionStartTime, game?.currentQuestionIndex]);
 
   async function loadGame() {
     try {
@@ -697,13 +792,27 @@ function HostGameContent() {
                   </span>
                 </div>
                 {currentQuestion.hasTimer && !game.answersRevealed && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className={`mt-3 flex items-center gap-2 p-2 rounded-lg border-2 ${
+                    timeRemaining === 0 
+                      ? 'bg-red-50 border-red-300' 
+                      : (timeRemaining !== null && timeRemaining <= 10)
+                        ? 'bg-orange-50 border-orange-200' 
+                        : 'bg-orange-50 border-orange-200'
+                  }`}>
+                    <svg className={`w-5 h-5 ${timeRemaining === 0 ? 'text-red-600' : 'text-orange-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <span className="text-sm font-medium text-slate-600">
-                      Timer active ({currentQuestion.timerSeconds}s)
-                    </span>
+                    {timeRemaining === null ? (
+                      <span className="text-sm font-medium text-slate-600">
+                        Timer active ({currentQuestion.timerSeconds}s)
+                      </span>
+                    ) : timeRemaining === 0 ? (
+                      <span className="text-sm font-bold text-red-600">Time's Up!</span>
+                    ) : (
+                      <span className={`text-sm font-bold ${timeRemaining <= 10 ? 'text-red-600 animate-pulse' : 'text-orange-600'}`}>
+                        {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')} remaining
+                      </span>
+                    )}
                   </div>
                 )}
               </div>

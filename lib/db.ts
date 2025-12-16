@@ -59,6 +59,25 @@ export function getSupabaseClient() {
   });
 }
 
+// Function to create a Supabase client for client-side usage (with realtime support)
+// This should only be called from client components
+export function getSupabaseClientForRealtime() {
+  if (typeof window === 'undefined') {
+    throw new Error('getSupabaseClientForRealtime can only be called from client components');
+  }
+  
+  const currentUrl = getEnvVar("NEXT_PUBLIC_SUPABASE_URL", DEFAULT_SUPABASE_URL);
+  const currentKey = getEnvVar("NEXT_PUBLIC_SUPABASE_ANON_KEY", DEFAULT_SUPABASE_KEY);
+  
+  return createClient(currentUrl, currentKey, {
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  });
+}
+
 // Default export for backward compatibility
 export const supabase = getSupabaseClient();
 

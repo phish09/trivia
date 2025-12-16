@@ -363,6 +363,27 @@ export async function getGame(code: string) {
     .eq("game_id", game.id)
     .order("score", { ascending: false });
 
+  // Calculate time remaining for current question (server-side timer)
+  let timeRemaining: number | null = null;
+  if (game.current_question_index !== null && game.current_question_index !== undefined) {
+    const currentQuestion = (game.questions || [])[game.current_question_index];
+    if (currentQuestion && currentQuestion.has_timer && currentQuestion.timer_seconds && game.question_start_time) {
+      const startTime = new Date(game.question_start_time).getTime();
+      const now = Date.now();
+      const elapsed = Math.floor((now - startTime) / 1000);
+      const remaining = Math.max(0, currentQuestion.timer_seconds - elapsed);
+      timeRemaining = remaining;
+      
+      // Debug: log if timer seems wrong
+      if (elapsed < 0) {
+        console.warn(`Timer calculation issue: elapsed is negative (${elapsed}s). startTime: ${game.question_start_time}, now: ${new Date(now).toISOString()}`);
+      }
+      if (remaining === 0 && elapsed < currentQuestion.timer_seconds) {
+        console.warn(`Timer calculation issue: remaining is 0 but elapsed (${elapsed}s) < timer_seconds (${currentQuestion.timer_seconds}s)`);
+      }
+    }
+  }
+
   return {
     id: game.id,
     code: game.code,
@@ -372,6 +393,8 @@ export async function getGame(code: string) {
     currentQuestionIndex: game.current_question_index,
     answersRevealed: game.answers_revealed || false,
     gameEnded: game.game_ended || false,
+    timeRemaining: timeRemaining,
+    questionStartTime: game.question_start_time || null, // Include for client-side calculation if needed
     questions: (game.questions || [])
       .sort((a: any, b: any) => {
         // Sort by question_order field if available, otherwise by id as fallback
@@ -422,6 +445,7 @@ export async function activateQuestion(gameId: string, questionIndex: number) {
     .update({ 
       current_question_index: questionIndex,
       answers_revealed: false,
+      question_start_time: new Date().toISOString(), // Store server timestamp when question starts
     })
     .eq("id", gameId);
   
@@ -560,7 +584,10 @@ export async function revealAnswers(gameId: string, questionId: string) {
     // The is_correct boolean from manuallyAwardPoints is preserved and sent to players
     const { error } = await supabase
       .from("games")
-      .update({ answers_revealed: true })
+      .update({ 
+        answers_revealed: true,
+        question_start_time: null, // Clear timer when answers are revealed
+      })
       .eq("id", gameId);
     if (error) throw new Error(error.message);
     return;
@@ -620,10 +647,13 @@ export async function revealAnswers(gameId: string, questionId: string) {
       .eq("id", answer.player_id);
   }
 
-  // Mark answers as revealed
+  // Mark answers as revealed and clear timer start time
   const { error } = await supabase
     .from("games")
-    .update({ answers_revealed: true })
+    .update({ 
+      answers_revealed: true,
+      question_start_time: null, // Clear timer when answers are revealed
+    })
     .eq("id", gameId);
   
   if (error) throw new Error(error.message);
@@ -664,9 +694,10 @@ export async function nextQuestion(gameId: string, nextIndex: number) {
   
   const { error } = await supabase
     .from("games")
-    .update({
+    .update({ 
       current_question_index: nextIndex,
       answers_revealed: false,
+      question_start_time: null, // Clear previous timer, will be set when question is activated
     })
     .eq("id", gameId);
   
