@@ -896,7 +896,7 @@ function PlayPageContent() {
 
           {/* Results Card */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-            <h2 className="text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
+            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
             
             {playerAnswer ? (
               <div className={`mb-6 p-6 rounded-xl border-2 ${
@@ -1185,7 +1185,7 @@ function PlayPageContent() {
                 )}
               </div>
             )}
-            <h2 className="text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
+            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-6 md:px-12 text-center">{currentQuestion.text}</h2>
           </div>
 
           {currentQuestion.isFillInBlank ? (
@@ -1258,7 +1258,7 @@ function PlayPageContent() {
               {currentQuestion.choices.map((choice: string, idx: number) => (
                 <button
                   key={idx}
-                  className={`w-full text-left py-5 px-8 border-2 rounded-full transition-all ${
+                  className={`w-full text-sm md:text-lg text-left py-5 px-8 border-2 rounded-full transition-all ${
                     selectedAnswer === idx
                       ? "text-white border-secondary shadow-lg scale-[1.02]"
                       : submitted
