@@ -344,37 +344,39 @@ function PlayPageContent() {
       return;
     }
 
-    const currentQuestion = game.questions[game.currentQuestionIndex];
+    const currentQuestion = game.questions?.[game.currentQuestionIndex];
     if (!currentQuestion || !currentQuestion.hasTimer || submitted) {
       setTimeRemaining(null);
       currentQuestionIdRef.current = null;
       return;
     }
 
-    // Initialize timer when question changes
+    // Update question ref when question changes
     if (currentQuestionIdRef.current !== currentQuestion.id) {
       currentQuestionIdRef.current = currentQuestion.id;
+    }
+
+    // If we have questionStartTime and timer should be active, always initialize/sync
+    if (game.questionStartTime && currentQuestion.hasTimer && currentQuestion.timerSeconds) {
       // ALWAYS use server-calculated time if available
       if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
         setTimeRemaining(game.timeRemaining);
-      } else if (game.questionStartTime && currentQuestion.timerSeconds) {
-        // Fallback: calculate client-side from question_start_time if server hasn't calculated yet
+      } else {
+        // Calculate client-side from question_start_time
         const startTime = new Date(game.questionStartTime).getTime();
         const now = Date.now();
         const elapsed = Math.floor((now - startTime) / 1000);
         const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
         setTimeRemaining(remaining);
-      } else {
-        // Wait for server to provide time - don't start a fresh timer
-        setTimeRemaining(null);
       }
+    } else if (!game.questionStartTime) {
+      // No start time yet - wait for it to be set
+      setTimeRemaining(null);
     } else {
-      // Question hasn't changed - sync with server time if available
-      if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
-        setTimeRemaining(game.timeRemaining);
-      }
+      // Question doesn't have timer - clear it
+      setTimeRemaining(null);
     }
-  }, [game?.timeRemaining, game?.currentQuestionIndex, game?.answersRevealed, submitted]);
+  }, [game?.timeRemaining, game?.currentQuestionIndex, game?.answersRevealed, game?.questionStartTime, submitted]);
 
   // Separate effect for countdown interval - only runs when timeRemaining is set
   useEffect(() => {

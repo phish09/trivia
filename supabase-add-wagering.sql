@@ -8,3 +8,4 @@ ALTER TABLE player_answers
 ADD COLUMN IF NOT EXISTS wager INTEGER;
 
 
+

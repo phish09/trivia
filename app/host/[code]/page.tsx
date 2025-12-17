@@ -20,7 +20,7 @@ function HostGameContent() {
   const [isFillInBlank, setIsFillInBlank] = useState(false);
   const [isTrueFalse, setIsTrueFalse] = useState(false);
   const [hasTimer, setHasTimer] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState(30);
+  const [timerSeconds, setTimerSeconds] = useState<number | string>(30);
   const [fillInBlankAnswer, setFillInBlankAnswer] = useState("");
   const [hasWager, setHasWager] = useState(false);
   const [maxWager, setMaxWager] = useState(10);
@@ -34,7 +34,7 @@ function HostGameContent() {
   const [editIsFillInBlank, setEditIsFillInBlank] = useState(false);
   const [editIsTrueFalse, setEditIsTrueFalse] = useState(false);
   const [editHasTimer, setEditHasTimer] = useState(false);
-  const [editTimerSeconds, setEditTimerSeconds] = useState(30);
+  const [editTimerSeconds, setEditTimerSeconds] = useState<number | string>(30);
   const [editFillInBlankAnswer, setEditFillInBlankAnswer] = useState("");
   const [editHasWager, setEditHasWager] = useState(false);
   const [editMaxWager, setEditMaxWager] = useState(10);
@@ -43,6 +43,8 @@ function HostGameContent() {
   const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const currentQuestionIdRef = useRef<string | null>(null);
+  const previousQuestionStartTimeRef = useRef<string | null>(null);
+  const timerInitializedRef = useRef<boolean>(false);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const confettiAnimationRef = useRef<number | null>(null);
   const confettiTriggeredRef = useRef<boolean>(false);
@@ -219,40 +221,69 @@ function HostGameContent() {
     if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) {
       setTimeRemaining(null);
       currentQuestionIdRef.current = null;
+      previousQuestionStartTimeRef.current = null;
+      timerInitializedRef.current = false;
       return;
     }
 
-    const currentQuestion = game.questions[game.currentQuestionIndex];
+    const currentQuestion = game.questions?.[game.currentQuestionIndex];
     if (!currentQuestion || !currentQuestion.hasTimer || game.answersRevealed) {
       setTimeRemaining(null);
       currentQuestionIdRef.current = null;
+      previousQuestionStartTimeRef.current = null;
+      timerInitializedRef.current = false;
       return;
     }
 
-    // Initialize timer when question changes
-    if (currentQuestionIdRef.current !== currentQuestion.id) {
+    // Check if question changed
+    const questionChanged = currentQuestionIdRef.current !== currentQuestion.id;
+    // Check if questionStartTime changed (question was reactivated)
+    // Compare with previous value BEFORE updating the ref
+    const startTimeChanged = game.questionStartTime !== previousQuestionStartTimeRef.current;
+    
+    // Update refs AFTER checking for changes
+    if (questionChanged) {
       currentQuestionIdRef.current = currentQuestion.id;
-      // ALWAYS use server-calculated time if available
+      timerInitializedRef.current = false; // Reset initialization flag when question changes
+      // Reset previous start time when question changes so we detect when new question gets start time
+      previousQuestionStartTimeRef.current = null;
+    }
+    
+    // If we have questionStartTime and timer should be active, always initialize/sync
+    if (game.questionStartTime && currentQuestion.hasTimer && currentQuestion.timerSeconds) {
+      // Update initialization flag when question or start time changes
+      if (questionChanged || startTimeChanged) {
+        timerInitializedRef.current = true;
+      }
+      
+      // ALWAYS calculate and set timeRemaining when we have questionStartTime
+      // Use server-calculated time if available, otherwise calculate client-side
       if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
         setTimeRemaining(game.timeRemaining);
-      } else if (game.questionStartTime && currentQuestion.timerSeconds) {
-        // Fallback: calculate client-side from question_start_time if server hasn't calculated yet
+      } else {
+        // Calculate client-side from question_start_time
         const startTime = new Date(game.questionStartTime).getTime();
         const now = Date.now();
         const elapsed = Math.floor((now - startTime) / 1000);
         const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
         setTimeRemaining(remaining);
-      } else {
-        // Wait for server to provide time - don't start a fresh timer
-        setTimeRemaining(null);
       }
+      
+      // Update the ref AFTER initializing to track that we've processed this start time
+      previousQuestionStartTimeRef.current = game.questionStartTime;
+    } else if (!game.questionStartTime) {
+      // No start time yet - wait for it to be set
+      setTimeRemaining(null);
+      timerInitializedRef.current = false;
+      // Update ref to track that we've seen null
+      previousQuestionStartTimeRef.current = null;
     } else {
-      // Question hasn't changed - sync with server time if available
-      if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
-        setTimeRemaining(game.timeRemaining);
-      }
+      // Question doesn't have timer - clear it
+      setTimeRemaining(null);
+      timerInitializedRef.current = false;
+      previousQuestionStartTimeRef.current = null;
     }
-  }, [game?.timeRemaining, game?.currentQuestionIndex, game?.answersRevealed]);
+  }, [game?.timeRemaining, game?.currentQuestionIndex, game?.answersRevealed, game?.questionStartTime]);
 
   // Separate effect for countdown interval - only runs when timeRemaining is set
   useEffect(() => {
@@ -265,7 +296,7 @@ function HostGameContent() {
       if (game?.timeRemaining !== null && game?.timeRemaining !== undefined) {
         // Always sync with server - it's the source of truth
         setTimeRemaining(game.timeRemaining);
-      } else if (game?.questionStartTime && game?.questions?.[game.currentQuestionIndex]?.timerSeconds) {
+      } else if (game?.questionStartTime && game?.questions?.[game.currentQuestionIndex]?.hasTimer && game?.questions?.[game.currentQuestionIndex]?.timerSeconds) {
         // Fallback: recalculate from question_start_time
         const currentQuestion = game.questions[game.currentQuestionIndex];
         const startTime = new Date(game.questionStartTime).getTime();
@@ -440,7 +471,7 @@ function HostGameContent() {
       isFillInBlank,
       isTrueFalse,
       hasTimer,
-      timerSeconds: hasTimer ? timerSeconds : undefined,
+      timerSeconds: hasTimer ? (Number(timerSeconds) || 30) : undefined,
       fillInBlankAnswer: isFillInBlank ? fillInBlankAnswer : undefined,
       hasWager,
       maxWager: hasWager ? maxWager : undefined,
@@ -510,7 +541,7 @@ function HostGameContent() {
         isFillInBlank: editIsFillInBlank,
         isTrueFalse: editIsTrueFalse,
         hasTimer: editHasTimer,
-        timerSeconds: editHasTimer ? editTimerSeconds : undefined,
+        timerSeconds: editHasTimer ? (Number(editTimerSeconds) || 30) : undefined,
         fillInBlankAnswer: editIsFillInBlank ? editFillInBlankAnswer : undefined,
         hasWager: editHasWager,
         maxWager: editHasWager ? editMaxWager : undefined,
@@ -663,7 +694,13 @@ function HostGameContent() {
     const nextIndex = game.currentQuestionIndex + 1;
     // nextQuestion will automatically mark game as ended if there are no more questions
     await nextQuestion(game.id, nextIndex);
-    loadGame();
+    await loadGame();
+    // Auto-activate the next question so timer starts immediately
+    const updatedGame = await getGame(code);
+    if (updatedGame && !updatedGame.gameEnded && updatedGame.currentQuestionIndex !== null && updatedGame.currentQuestionIndex !== undefined) {
+      await activateQuestion(updatedGame.id, updatedGame.currentQuestionIndex);
+      await loadGame();
+    }
   }
 
   async function handleResetQuestion(questionId: string) {
@@ -1586,14 +1623,30 @@ function HostGameContent() {
                 <input
                   type="number"
                   min="1"
-                  max="600"
+                  max="999"
+                  maxLength={3}
                   className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
                   placeholder="e.g., 15 for 15 seconds, 120 for 2 minutes"
-                  value={timerSeconds}
-                  onChange={(e) => setTimerSeconds(Number(e.target.value) || 30)}
+                  value={timerSeconds === '' ? '' : timerSeconds}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === '') {
+                      setTimerSeconds(''); // Allow empty temporarily
+                    } else if (value.length <= 3) {
+                      const num = Number(value);
+                      if (!isNaN(num) && num >= 1 && num <= 999) {
+                        setTimerSeconds(num);
+                      }
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (timerSeconds === '' || timerSeconds === 0) {
+                      setTimerSeconds(30); // Default to 30 if empty on blur
+                    }
+                  }}
                 />
                 <p className="text-xs text-slate-500 mt-1">
-                  {timerSeconds} second{timerSeconds !== 1 ? 's' : ''} ({Math.floor(timerSeconds / 60)}m {timerSeconds % 60}s)
+                  {Number(timerSeconds) || 30} second{(Number(timerSeconds) || 30) !== 1 ? 's' : ''} ({Math.floor((Number(timerSeconds) || 30) / 60)}m {(Number(timerSeconds) || 30) % 60}s)
                 </p>
               </div>
             )}
@@ -1860,14 +1913,30 @@ function HostGameContent() {
                           <input
                             type="number"
                             min="1"
-                            max="600"
+                            max="999"
+                            maxLength={3}
                             className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
                             placeholder="e.g., 15 for 15 seconds, 120 for 2 minutes"
-                            value={editTimerSeconds}
-                            onChange={(e) => setEditTimerSeconds(Number(e.target.value) || 30)}
+                            value={editTimerSeconds === '' ? '' : editTimerSeconds}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '') {
+                                setEditTimerSeconds(''); // Allow empty temporarily
+                              } else if (value.length <= 3) {
+                                const num = Number(value);
+                                if (!isNaN(num) && num >= 1 && num <= 999) {
+                                  setEditTimerSeconds(num);
+                                }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              if (editTimerSeconds === '' || editTimerSeconds === 0) {
+                                setEditTimerSeconds(30); // Default to 30 if empty on blur
+                              }
+                            }}
                           />
                           <p className="text-xs text-slate-500 mt-1">
-                            {editTimerSeconds} second{editTimerSeconds !== 1 ? 's' : ''} ({Math.floor(editTimerSeconds / 60)}m {editTimerSeconds % 60}s)
+                            {Number(editTimerSeconds) || 30} second{(Number(editTimerSeconds) || 30) !== 1 ? 's' : ''} ({Math.floor((Number(editTimerSeconds) || 30) / 60)}m {(Number(editTimerSeconds) || 30) % 60}s)
                           </p>
                         </div>
                       )}
