@@ -858,10 +858,12 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
 
   // Update player answer with points and correct status
   // IMPORTANT: Explicitly set is_correct as a boolean (true/false), never null
+  // If checkbox is unchecked (isCorrect is false), ignore any points and set to 0
+  const finalPoints = isCorrect ? points : 0;
   const { error: updateError } = await supabase
     .from("player_answers")
     .update({
-      points_earned: points,
+      points_earned: finalPoints,
       is_correct: isCorrect === true, // Explicitly convert to boolean
       manually_scored: true,
     })
@@ -881,7 +883,7 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
 
     const currentScore = player?.score || 0;
     const previousPoints = answer.points_earned || 0;
-    const newScore = currentScore - previousPoints + points;
+    const newScore = currentScore - previousPoints + finalPoints;
 
     // Update player score (allow negative scores for wagering)
     await supabase

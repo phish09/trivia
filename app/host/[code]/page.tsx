@@ -48,6 +48,9 @@ function HostGameContent() {
   const confettiTriggeredRef = useRef<boolean>(false);
   const previousGameEndedRef = useRef<boolean>(false);
   const [passwordPrompt, setPasswordPrompt] = useState(false);
+  const [isRevealing, setIsRevealing] = useState(false);
+  const [savingStatus, setSavingStatus] = useState<Record<string, 'saving' | 'saved' | null>>({});
+  const saveTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordVerified, setPasswordVerified] = useState(false);
@@ -606,8 +609,53 @@ function HostGameContent() {
     if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) return;
     const currentQuestion = game.questions[game.currentQuestionIndex];
     if (!currentQuestion) return;
-    await revealAnswers(game.id, currentQuestion.id);
-    loadGame();
+    setIsRevealing(true);
+    try {
+      await revealAnswers(game.id, currentQuestion.id);
+      await loadGame();
+    } finally {
+      setIsRevealing(false);
+    }
+  }
+
+  async function autoSavePlayerScore(playerId: string, questionId: string) {
+    if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) return;
+    
+    // Clear any existing timeout for this player
+    if (saveTimeoutsRef.current[playerId]) {
+      clearTimeout(saveTimeoutsRef.current[playerId]);
+    }
+
+    // Set saving status
+    setSavingStatus(prev => ({ ...prev, [playerId]: 'saving' }));
+
+    // Debounce the save operation by 500ms
+    saveTimeoutsRef.current[playerId] = setTimeout(async () => {
+      const pointsInput = document.getElementById(`points-${playerId}`) as HTMLInputElement;
+      const correctCheckbox = document.getElementById(`correct-${playerId}`) as HTMLInputElement;
+      
+      if (!pointsInput || !correctCheckbox) return;
+
+      const points = Number(pointsInput.value) || 0;
+      const isCorrect = correctCheckbox.checked;
+
+      try {
+        await manuallyAwardPoints(playerId, questionId, points, isCorrect);
+        setSavingStatus(prev => ({ ...prev, [playerId]: 'saved' }));
+        // Reload game after a short delay to show the saved state
+        setTimeout(() => {
+          loadGame();
+          // Clear saved status after reload
+          setTimeout(() => {
+            setSavingStatus(prev => ({ ...prev, [playerId]: null }));
+          }, 1000);
+        }, 300);
+      } catch (error) {
+        console.error("Failed to auto-save points:", error);
+        setSavingStatus(prev => ({ ...prev, [playerId]: null }));
+        alert("Failed to save points. Please try again.");
+      }
+    }, 500);
   }
 
   async function handleNextQuestion() {
@@ -1062,6 +1110,8 @@ function HostGameContent() {
                                       // Auto-fill max points when checked
                                       pointsInput.value = maxPoints.toString();
                                     }
+                                    // Auto-save when checkbox changes
+                                    autoSavePlayerScore(player.id, currentQuestion.id);
                                   }}
                                 />
                                 <span className="text-xs font-medium text-slate-700">Correct</span>
@@ -1074,45 +1124,24 @@ function HostGameContent() {
                                   defaultValue={playerAnswer.pointsEarned || 0}
                                   className="w-16 px-2 py-1 border border-slate-500 bg-white rounded text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
                                   id={`points-${player.id}`}
+                                  onChange={() => {
+                                    // Auto-save when points change
+                                    autoSavePlayerScore(player.id, currentQuestion.id);
+                                  }}
                                 />
                                 <span className="text-xs text-slate-500">pts</span>
                               </div>
-                              <button
-                                onClick={async () => {
-                                  const pointsInput = document.getElementById(`points-${player.id}`) as HTMLInputElement;
-                                  const correctCheckbox = document.getElementById(`correct-${player.id}`) as HTMLInputElement;
-                                  const points = Number(pointsInput.value) || 0;
-                                  const isCorrect = correctCheckbox.checked;
-                                  const button = document.getElementById(`save-btn-${player.id}`) as HTMLButtonElement;
-                                  
-                                  // Show feedback
-                                  const originalText = button.textContent;
-                                  button.textContent = "Saving...";
-                                  button.disabled = true;
-                                  
-                                  try {
-                                    await manuallyAwardPoints(player.id, currentQuestion.id, points, isCorrect);
-                                    // Update button to show it was saved
-                                    button.textContent = "Saved!";
-                                    setTimeout(() => {
-                                      loadGame();
-                                    }, 500);
-                                  } catch (error) {
-                                    console.error("Failed to award points:", error);
-                                    button.textContent = originalText;
-                                    button.disabled = false;
-                                    alert("Failed to award points. Please try again.");
-                                  }
-                                }}
-                                id={`save-btn-${player.id}`}
-                                className={`px-3 py-1 rounded text-xs font-medium shadow-sm hover:shadow transition-all ${
-                                  playerAnswer.manuallyScored
-                                    ? "bg-slate-500 text-white hover:bg-slate-600 cursor-pointer"
-                                    : "bg-blue-600 text-white hover:bg-blue-700"
-                                }`}
-                              >
-                                {playerAnswer.manuallyScored ? "Update" : "Save"}
-                              </button>
+                              {savingStatus[player.id] === 'saving' && (
+                                <span className="text-xs text-blue-600">Saving...</span>
+                              )}
+                              {savingStatus[player.id] === 'saved' && (
+                                <span className="text-xs text-green-600 flex items-center gap-1">
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                  Saved
+                                </span>
+                              )}
                             </div>
                           )}
                         </div>
@@ -1124,14 +1153,15 @@ function HostGameContent() {
 
               {!game.answersRevealed ? (
                 <button
-                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
+                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
                   onClick={handleRevealAnswers}
+                  disabled={isRevealing}
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                   </svg>
-                  Reveal answers
+                  {isRevealing ? "Revealing..." : "Reveal answers"}
                 </button>
               ) : (
                 <div className="space-y-4">

@@ -3,3 +3,4 @@
 ALTER TABLE games ADD COLUMN IF NOT EXISTS host_password TEXT;
 
 
+
