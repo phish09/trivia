@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionForGame, saveSession, clearSession, getAllSessions } from "@/lib/session";
 import { getOrCreatePersistentPlayerId, getPlayerIdForGame, storePlayerMapping, clearPlayerMapping, getAllPlayerMappings } from "@/lib/cookies";
 import Modal from "@/components/Modal";
+import Link from "next/link";
 
 function JoinForm() {
   const router = useRouter();
@@ -260,7 +261,9 @@ function JoinForm() {
             </button>
           </div>
         </div>
-        <div className="animate-pop-in block m-auto w-40 mt-6">
+        <div className="flex justify-center gap-4 text-purple-300 py-6"><Link className="hover:text-white" href="/terms">Terms</Link><Link className="hover:text-white" href="/privacy">Privacy</Link></div>
+        <div className="animate-pop-in block m-auto w-40">
+          <Link href="/">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -287,6 +290,7 @@ function JoinForm() {
             </linearGradient>
             </defs>
             </svg>
+            </Link>
         </div>
       </div>
 

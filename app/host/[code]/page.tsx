@@ -1304,7 +1304,7 @@ function HostGameContent() {
                       })}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-3 items-center">
+                  <div className="flex flex-wrap gap-3 items-center w-full">
                     <button
                       className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
                       onClick={handleNextQuestion}
@@ -1316,7 +1316,8 @@ function HostGameContent() {
                     </button>
                     <span className="text-slate-500 font-medium">or</span>
                     <select
-                      className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                      className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all max-w-full min-w-0 flex-1"
+                      style={{ maxWidth: '100%' }}
                       onChange={(e) => {
                         const selectedIndex = Number(e.target.value);
                         if (selectedIndex >= 0 && selectedIndex < game.questions.length) {
@@ -1339,7 +1340,7 @@ function HostGameContent() {
           ) : (
             <div className="space-y-4 mt-4">
               <p className="text-slate-600 font-medium">No question active. Start the game or select a question:</p>
-              <div className="flex flex-wrap gap-3 items-center">
+              <div className="flex flex-wrap gap-3 items-center w-full">
                 <button
                   className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
                   onClick={() => handleActivateQuestion(0)}
@@ -1353,7 +1354,8 @@ function HostGameContent() {
                 </button>
                 <span className="text-slate-500 font-medium">or</span>
                 <select
-                  className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all max-w-full min-w-0 flex-1"
+                  style={{ maxWidth: '100%' }}
                   onChange={(e) => {
                     const selectedIndex = Number(e.target.value);
                     if (selectedIndex >= 0 && selectedIndex < game.questions.length) {

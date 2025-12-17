@@ -642,18 +642,29 @@ function PlayPageContent() {
   }
 
   function handleLeaveGameClick() {
-    if (!playerId || leaving) return;
+    if (leaving) return;
+    // Always show the modal, regardless of playerId state
+    // The handleLeaveGame function will handle cleanup even if playerId is null
     setShowLeaveModal(true);
   }
 
   async function handleLeaveGame() {
-    if (!playerId || leaving) return;
+    if (leaving) return;
 
     setLeaving(true);
     setShowLeaveModal(false);
     try {
-      await leaveGame(playerId);
-      // Clear session
+      // Try to leave game if playerId exists
+      const idToUse = playerId || getSessionForGame(code)?.playerId;
+      if (idToUse) {
+        try {
+          await leaveGame(idToUse);
+        } catch (leaveError) {
+          console.warn("Failed to call leaveGame API, but continuing with cleanup:", leaveError);
+        }
+      }
+      
+      // Always clear session and redirect, even if leaveGame API call fails
       clearSession();
       localStorage.removeItem(`playerId_${code}`);
       
@@ -665,8 +676,10 @@ function PlayPageContent() {
       router.push("/");
     } catch (error) {
       console.error("Failed to leave game:", error);
-      alert("Failed to leave game. Please try again.");
-      setLeaving(false);
+      // Even on error, try to redirect
+      clearSession();
+      localStorage.removeItem(`playerId_${code}`);
+      router.push("/");
     }
   }
 
@@ -700,13 +713,7 @@ function PlayPageContent() {
           style={{ position: 'fixed' }}
         />
         <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 text-center">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-amber-600 bg-clip-text text-transparent mb-2">
-              Game Over
-            </h1>
-            <p className="text-slate-600 text-lg">Thanks for playing!</p>
-          </div>
+          
 
           {/* Winner Card */}
           {winner && (
@@ -777,6 +784,13 @@ function PlayPageContent() {
               ))}
             </div>
           </div>
+          {/* Header */}
+          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 text-center">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-amber-600 bg-clip-text text-transparent mb-2">
+              Game Over
+            </h1>
+            <p className="text-slate-600 text-lg">Thanks for playing!</p>
+          </div>
 
           {/* Leave Game Button */}
           <div className="text-center">
@@ -789,6 +803,24 @@ function PlayPageContent() {
             </button>
           </div>
         </div>
+
+        {/* Leave Game Confirmation Modal */}
+        <Modal
+          isOpen={showLeaveModal}
+          onClose={() => {
+            setShowLeaveModal(false);
+          }}
+          title="Leave game"
+          message="Are you sure you want to leave the game? Your progress will be lost."
+          isConfirmDialog={true}
+          confirmText="Leave game"
+          cancelText="Cancel"
+          onConfirm={handleLeaveGame}
+          onCancel={() => {
+            setShowLeaveModal(false);
+          }}
+          showCloseButton={true}
+        />
       </div>
     );
   }
@@ -853,6 +885,24 @@ function PlayPageContent() {
               </button>
             </div>
           </div>
+
+          {/* Leave Game Confirmation Modal */}
+          <Modal
+            isOpen={showLeaveModal}
+            onClose={() => {
+              setShowLeaveModal(false);
+            }}
+            title="Leave game"
+            message="Are you sure you want to leave the game? Your progress will be lost."
+            isConfirmDialog={true}
+            confirmText="Leave game"
+            cancelText="Cancel"
+            onConfirm={handleLeaveGame}
+            onCancel={() => {
+              setShowLeaveModal(false);
+            }}
+            showCloseButton={true}
+          />
         </div>
       </div>
     );
@@ -882,6 +932,24 @@ function PlayPageContent() {
           </div>
         </div>
         <p className="text-gray-600">Waiting for questions...</p>
+
+        {/* Leave Game Confirmation Modal */}
+        <Modal
+          isOpen={showLeaveModal}
+          onClose={() => {
+            setShowLeaveModal(false);
+          }}
+          title="Leave game"
+          message="Are you sure you want to leave the game? Your progress will be lost."
+          isConfirmDialog={true}
+          confirmText="Leave game"
+          cancelText="Cancel"
+          onConfirm={handleLeaveGame}
+          onCancel={() => {
+            setShowLeaveModal(false);
+          }}
+          showCloseButton={true}
+        />
       </div>
     );
   }
@@ -1153,6 +1221,24 @@ function PlayPageContent() {
             </button>
           </div>
         </div>
+
+        {/* Leave Game Confirmation Modal */}
+        <Modal
+          isOpen={showLeaveModal}
+          onClose={() => {
+            setShowLeaveModal(false);
+          }}
+          title="Leave game"
+          message="Are you sure you want to leave the game? Your progress will be lost."
+          isConfirmDialog={true}
+          confirmText="Leave game"
+          cancelText="Cancel"
+          onConfirm={handleLeaveGame}
+          onCancel={() => {
+            setShowLeaveModal(false);
+          }}
+          showCloseButton={true}
+        />
       </div>
     );
   }
