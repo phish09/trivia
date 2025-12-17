@@ -251,22 +251,41 @@ function HostGameContent() {
     
     // If we have questionStartTime and timer should be active, always initialize/sync
     if (game.questionStartTime && currentQuestion.hasTimer && currentQuestion.timerSeconds) {
-      // Update initialization flag when question or start time changes
-      if (questionChanged || startTimeChanged) {
+      // Always initialize if question changed, start time changed, or not yet initialized
+      // This ensures timer starts even if refs aren't tracking properly
+      if (questionChanged || startTimeChanged || !timerInitializedRef.current) {
         timerInitializedRef.current = true;
-      }
-      
-      // ALWAYS calculate and set timeRemaining when we have questionStartTime
-      // Use server-calculated time if available, otherwise calculate client-side
-      if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
-        setTimeRemaining(game.timeRemaining);
+        
+        // ALWAYS calculate and set timeRemaining when we have questionStartTime
+        // Use server-calculated time if available, otherwise calculate client-side
+        if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
+          setTimeRemaining(game.timeRemaining);
+        } else {
+          // Calculate client-side from question_start_time
+          // Ensure questionStartTime is a valid date string
+          const startTimeStr = game.questionStartTime;
+          if (!startTimeStr) {
+            setTimeRemaining(null);
+            return;
+          }
+          
+          const startTime = new Date(startTimeStr).getTime();
+          if (isNaN(startTime)) {
+            console.error('[Timer] Invalid questionStartTime:', startTimeStr);
+            setTimeRemaining(null);
+            return;
+          }
+          
+          const now = Date.now();
+          const elapsed = Math.floor((now - startTime) / 1000);
+          const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
+          setTimeRemaining(remaining);
+        }
       } else {
-        // Calculate client-side from question_start_time
-        const startTime = new Date(game.questionStartTime).getTime();
-        const now = Date.now();
-        const elapsed = Math.floor((now - startTime) / 1000);
-        const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
-        setTimeRemaining(remaining);
+        // Question hasn't changed but sync with server time if available
+        if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
+          setTimeRemaining(game.timeRemaining);
+        }
       }
       
       // Update the ref AFTER initializing to track that we've processed this start time
@@ -299,11 +318,16 @@ function HostGameContent() {
       } else if (game?.questionStartTime && game?.questions?.[game.currentQuestionIndex]?.hasTimer && game?.questions?.[game.currentQuestionIndex]?.timerSeconds) {
         // Fallback: recalculate from question_start_time
         const currentQuestion = game.questions[game.currentQuestionIndex];
-        const startTime = new Date(game.questionStartTime).getTime();
-        const now = Date.now();
-        const elapsed = Math.floor((now - startTime) / 1000);
-        const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
-        setTimeRemaining(remaining);
+        const startTimeStr = game.questionStartTime;
+        if (startTimeStr) {
+          const startTime = new Date(startTimeStr).getTime();
+          if (!isNaN(startTime)) {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000);
+            const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
+            setTimeRemaining(remaining);
+          }
+        }
       }
     }, 2000); // Sync every 2 seconds
 
@@ -694,11 +718,19 @@ function HostGameContent() {
     const nextIndex = game.currentQuestionIndex + 1;
     // nextQuestion will automatically mark game as ended if there are no more questions
     await nextQuestion(game.id, nextIndex);
+    
+    // Wait a bit for the database to update, then load game
+    await new Promise(resolve => setTimeout(resolve, 100));
     await loadGame();
+    
     // Auto-activate the next question so timer starts immediately
+    // Use a small delay to ensure state is updated
+    await new Promise(resolve => setTimeout(resolve, 100));
     const updatedGame = await getGame(code);
     if (updatedGame && !updatedGame.gameEnded && updatedGame.currentQuestionIndex !== null && updatedGame.currentQuestionIndex !== undefined) {
       await activateQuestion(updatedGame.id, updatedGame.currentQuestionIndex);
+      // Wait a bit for activation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
       await loadGame();
     }
   }

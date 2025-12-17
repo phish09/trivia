@@ -363,7 +363,19 @@ function PlayPageContent() {
         setTimeRemaining(game.timeRemaining);
       } else {
         // Calculate client-side from question_start_time
-        const startTime = new Date(game.questionStartTime).getTime();
+        const startTimeStr = game.questionStartTime;
+        if (!startTimeStr) {
+          setTimeRemaining(null);
+          return;
+        }
+        
+        const startTime = new Date(startTimeStr).getTime();
+        if (isNaN(startTime)) {
+          console.error('[Timer] Invalid questionStartTime:', startTimeStr);
+          setTimeRemaining(null);
+          return;
+        }
+        
         const now = Date.now();
         const elapsed = Math.floor((now - startTime) / 1000);
         const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
@@ -392,11 +404,16 @@ function PlayPageContent() {
       } else if (game?.questionStartTime && game?.questions?.[game.currentQuestionIndex]?.timerSeconds) {
         // Fallback: recalculate from question_start_time
         const currentQuestion = game.questions[game.currentQuestionIndex];
-        const startTime = new Date(game.questionStartTime).getTime();
-        const now = Date.now();
-        const elapsed = Math.floor((now - startTime) / 1000);
-        const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
-        setTimeRemaining(remaining);
+        const startTimeStr = game.questionStartTime;
+        if (startTimeStr) {
+          const startTime = new Date(startTimeStr).getTime();
+          if (!isNaN(startTime)) {
+            const now = Date.now();
+            const elapsed = Math.floor((now - startTime) / 1000);
+            const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
+            setTimeRemaining(remaining);
+          }
+        }
       }
     }, 2000); // Sync every 2 seconds
 
