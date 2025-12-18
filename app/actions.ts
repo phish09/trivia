@@ -330,11 +330,6 @@ export async function verifyHostPassword(code: string, password: string) {
 
 export async function getGame(code: string) {
   const supabase = getSupabaseClient();
-  // Cleanup old games before fetching (runs occasionally)
-  // Only cleanup 1% of the time to avoid overhead
-  if (Math.random() < 0.01) {
-    await cleanupOldGames();
-  }
 
   const { data: game, error: gameError } = await supabase
     .from("games")
@@ -347,19 +342,6 @@ export async function getGame(code: string) {
     .single();
   
   if (gameError || !game) throw new Error("Game not found");
-
-  // Check if game is older than 14 days and delete it
-  const gameAge = Date.now() - new Date(game.created_at).getTime();
-  const fourteenDays = 14 * 24 * 60 * 60 * 1000;
-  
-  if (gameAge > fourteenDays) {
-    // Game is too old, delete it
-    await supabase
-      .from("games")
-      .delete()
-      .eq("id", game.id);
-    throw new Error("Game has expired (older than 14 days)");
-  }
 
   // Get player answers and scores
   const { data: playerAnswers } = await supabase
@@ -893,17 +875,3 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
   }
 }
 
-export async function cleanupOldGames() {
-  const supabase = getSupabaseClient();
-  // Delete games older than 14 days
-  const fourteenDaysAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-  
-  const { error } = await supabase
-    .from("games")
-    .delete()
-    .lt("created_at", fourteenDaysAgo);
-  
-  if (error) {
-    console.error("Failed to cleanup old games:", error);
-  }
-}
