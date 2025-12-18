@@ -1022,7 +1022,7 @@ function HostGameContent() {
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-slate-500 mt-2">Share this code with players to join</p>
+                <p className="text-sm text-slate-500 mt-2">Share this code with players to join / Keep this to access this game controls</p>
               </div>
               {(() => {
                 if (!game) return null;
