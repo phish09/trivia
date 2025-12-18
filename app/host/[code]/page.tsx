@@ -1024,6 +1024,70 @@ function HostGameContent() {
                 </div>
                 <p className="text-sm text-slate-500 mt-2">Share this code with players to join</p>
               </div>
+              {(() => {
+                if (!game) return null;
+                
+                // Helper function to calculate days until deletion
+                const getDaysUntilDeletion = () => {
+                  const now = Date.now();
+                  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+                  
+                  if (!game.gameStarted) {
+                    // Not started: count from creation
+                    const createdAt = new Date(game.createdAt).getTime();
+                    const daysSinceCreation = Math.floor((now - createdAt) / (24 * 60 * 60 * 1000));
+                    const daysRemaining = 30 - daysSinceCreation;
+                    return daysRemaining > 0 ? daysRemaining : 0;
+                  } else {
+                    // Started: count from last activity
+                    const lastActivity = new Date(game.lastActivity).getTime();
+                    const daysSinceActivity = Math.floor((now - lastActivity) / (24 * 60 * 60 * 1000));
+                    const daysRemaining = 30 - daysSinceActivity;
+                    return daysRemaining > 0 ? daysRemaining : 0;
+                  }
+                };
+                
+                const daysRemaining = getDaysUntilDeletion();
+                if (daysRemaining !== null && daysRemaining <= 7) {
+                  const isStarted = game.gameStarted;
+                  return (
+                    <div className={`mt-4 p-4 rounded-xl border-2 ${
+                      daysRemaining <= 3 
+                        ? 'bg-red-50 border-red-200' 
+                        : 'bg-amber-50 border-amber-200'
+                    }`}>
+                      <div className="flex items-start gap-3">
+                        <svg className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
+                          daysRemaining <= 3 ? 'text-red-600' : 'text-amber-600'
+                        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <div>
+                          <p className={`font-semibold ${
+                            daysRemaining <= 3 ? 'text-red-800' : 'text-amber-800'
+                          }`}>
+                            {daysRemaining === 0 
+                              ? 'Game will be deleted soon'
+                              : daysRemaining === 1
+                              ? 'Game will be deleted in 1 day'
+                              : `Game will be deleted in ${daysRemaining} days`
+                            }
+                          </p>
+                          <p className={`text-sm mt-1 ${
+                            daysRemaining <= 3 ? 'text-red-700' : 'text-amber-700'
+                          }`}>
+                            {isStarted 
+                              ? 'Game has been inactive. Continue playing to prevent deletion.'
+                              : 'Start the game by activating a question to prevent deletion.'
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
             
           </div>

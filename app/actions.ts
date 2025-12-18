@@ -141,6 +141,13 @@ export async function joinGame(code: string, username: string, existingPlayerId?
     .single();
   
   if (error) throw new Error(error.message);
+  
+  // Update game activity when player joins
+  await supabase
+    .from("games")
+    .update({ last_activity: new Date().toISOString() })
+    .eq("id", game.id);
+  
   return data;
 }
 
@@ -209,6 +216,13 @@ export async function addQuestion(gameId: string, q: {
     .single();
   
   if (error) throw new Error(error.message);
+  
+  // Update game activity when question is added
+  await supabase
+    .from("games")
+    .update({ last_activity: new Date().toISOString() })
+    .eq("id", gameId);
+  
   return data;
 }
 
@@ -273,6 +287,21 @@ export async function updateQuestion(questionId: string, q: {
     .single();
   
   if (error) throw new Error(error.message);
+  
+  // Update game activity when question is updated
+  const { data: question } = await supabase
+    .from("questions")
+    .select("game_id")
+    .eq("id", questionId)
+    .single();
+  
+  if (question) {
+    await supabase
+      .from("games")
+      .update({ last_activity: new Date().toISOString() })
+      .eq("id", question.game_id);
+  }
+  
   return data;
 }
 
@@ -293,17 +322,40 @@ export async function reorderQuestions(gameId: string, questionIds: string[]) {
     }
   }
   
+  // Update game activity when questions are reordered
+  await supabase
+    .from("games")
+    .update({ last_activity: new Date().toISOString() })
+    .eq("id", gameId);
+  
   return { success: true };
 }
 
 export async function deleteQuestion(questionId: string) {
   const supabase = getSupabaseClient();
+  
+  // Get game_id before deleting
+  const { data: question } = await supabase
+    .from("questions")
+    .select("game_id")
+    .eq("id", questionId)
+    .single();
+  
   const { error } = await supabase
     .from("questions")
     .delete()
     .eq("id", questionId);
   
   if (error) throw new Error(error.message);
+  
+  // Update game activity when question is deleted
+  if (question) {
+    await supabase
+      .from("games")
+      .update({ last_activity: new Date().toISOString() })
+      .eq("id", question.game_id);
+  }
+  
   return { success: true };
 }
 
@@ -342,6 +394,33 @@ export async function getGame(code: string) {
     .single();
   
   if (gameError || !game) throw new Error("Game not found");
+
+  // Check if game should be deleted:
+  // 1. Not started AND older than 30 days from creation
+  // 2. Started BUT inactive for 30 days from last_activity
+  const gameStarted = game.game_started || false;
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
+  
+  let shouldDelete = false;
+  if (!gameStarted) {
+    // Not started: check age from creation
+    const gameAge = now - new Date(game.created_at).getTime();
+    shouldDelete = gameAge > thirtyDays;
+  } else {
+    // Started: check inactivity from last_activity
+    const lastActivity = game.last_activity || game.created_at;
+    const inactivityPeriod = now - new Date(lastActivity).getTime();
+    shouldDelete = inactivityPeriod > thirtyDays;
+  }
+  
+  if (shouldDelete) {
+    await supabase
+      .from("games")
+      .delete()
+      .eq("id", game.id);
+    throw new Error("Game has expired (inactive for 30 days)");
+  }
 
   // Get player answers and scores
   const { data: playerAnswers } = await supabase
@@ -383,6 +462,8 @@ export async function getGame(code: string) {
     hostName: game.host_name,
     hostPassword: game.host_password || null,
     createdAt: game.created_at,
+    lastActivity: game.last_activity || game.created_at,
+    gameStarted: game.game_started || false,
     currentQuestionIndex: game.current_question_index,
     answersRevealed: game.answers_revealed || false,
     gameEnded: game.game_ended || false,
@@ -433,13 +514,30 @@ export async function getGame(code: string) {
 
 export async function activateQuestion(gameId: string, questionIndex: number) {
   const supabase = getSupabaseClient();
+  
+  // Check if this is first activation
+  const { data: currentGame } = await supabase
+    .from("games")
+    .select("game_started")
+    .eq("id", gameId)
+    .single();
+  
+  const now = new Date().toISOString();
+  const updateData: any = {
+    current_question_index: questionIndex,
+    answers_revealed: false,
+    question_start_time: now,
+    last_activity: now,
+  };
+  
+  // Mark game as started if it hasn't been started yet
+  if (!currentGame?.game_started) {
+    updateData.game_started = true;
+  }
+  
   const { error } = await supabase
     .from("games")
-    .update({ 
-      current_question_index: questionIndex,
-      answers_revealed: false,
-      question_start_time: new Date().toISOString(), // Store server timestamp when question starts
-    })
+    .update(updateData)
     .eq("id", gameId);
   
   if (error) throw new Error(error.message);
@@ -496,6 +594,20 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
     .insert(insertData);
   
   if (error) throw new Error(error.message);
+  
+  // Update game activity when player submits answer
+  const { data: question } = await supabase
+    .from("questions")
+    .select("game_id")
+    .eq("id", questionId)
+    .single();
+  
+  if (question) {
+    await supabase
+      .from("games")
+      .update({ last_activity: new Date().toISOString() })
+      .eq("id", question.game_id);
+  }
 }
 
 export async function revealAnswers(gameId: string, questionId: string) {
@@ -519,7 +631,10 @@ export async function revealAnswers(gameId: string, questionId: string) {
     // Mark answers as revealed even if no answers
     const { error } = await supabase
       .from("games")
-      .update({ answers_revealed: true })
+      .update({ 
+        answers_revealed: true,
+        last_activity: new Date().toISOString(),
+      })
       .eq("id", gameId);
     if (error) throw new Error(error.message);
     return;
@@ -580,6 +695,7 @@ export async function revealAnswers(gameId: string, questionId: string) {
       .update({ 
         answers_revealed: true,
         question_start_time: null, // Clear timer when answers are revealed
+        last_activity: new Date().toISOString(),
       })
       .eq("id", gameId);
     if (error) throw new Error(error.message);
@@ -646,6 +762,7 @@ export async function revealAnswers(gameId: string, questionId: string) {
     .update({ 
       answers_revealed: true,
       question_start_time: null, // Clear timer when answers are revealed
+      last_activity: new Date().toISOString(),
     })
     .eq("id", gameId);
   
@@ -678,6 +795,7 @@ export async function nextQuestion(gameId: string, nextIndex: number) {
         game_ended: true,
         current_question_index: null,
         answers_revealed: false,
+        last_activity: new Date().toISOString(),
       })
       .eq("id", gameId);
     
@@ -691,6 +809,7 @@ export async function nextQuestion(gameId: string, nextIndex: number) {
       current_question_index: nextIndex,
       answers_revealed: false,
       question_start_time: null, // Clear previous timer, will be set when question is activated
+      last_activity: new Date().toISOString(),
     })
     .eq("id", gameId);
   
@@ -754,9 +873,22 @@ export async function resetQuestion(gameId: string, questionId: string) {
         .update({
           current_question_index: null,
           answers_revealed: false,
+          last_activity: new Date().toISOString(),
         })
         .eq("id", gameId);
+    } else {
+      // Update activity even if not resetting current question
+      await supabase
+        .from("games")
+        .update({ last_activity: new Date().toISOString() })
+        .eq("id", gameId);
     }
+  } else {
+    // Update activity even if no current question
+    await supabase
+      .from("games")
+      .update({ last_activity: new Date().toISOString() })
+      .eq("id", gameId);
   }
 }
 
@@ -789,6 +921,7 @@ export async function resetGame(gameId: string) {
       current_question_index: null,
       answers_revealed: false,
       game_ended: false, // Reset the game_ended flag so players can play again
+      last_activity: new Date().toISOString(),
     })
     .eq("id", gameId);
 }
@@ -803,6 +936,7 @@ export async function endGame(gameId: string) {
       game_ended: true,
       current_question_index: null,
       answers_revealed: false,
+      last_activity: new Date().toISOString(),
     })
     .eq("id", gameId);
   
@@ -872,6 +1006,12 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
       .from("players")
       .update({ score: newScore })
       .eq("id", playerId);
+    
+    // Update game activity when manually awarding points
+    await supabase
+      .from("games")
+      .update({ last_activity: new Date().toISOString() })
+      .eq("id", question.game_id);
   }
 }
 
