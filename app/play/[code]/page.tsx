@@ -29,6 +29,8 @@ function PlayPageContent() {
   const previousGameEndedRef = useRef<boolean>(false);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
+  const textAnswerDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const [textAnswerDisplay, setTextAnswerDisplay] = useState<string>("");
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -578,8 +580,43 @@ function PlayPageContent() {
 
   async function handleAnswerSelect(answerIndex: number) {
     if (submitted || !game || !playerId) return;
+    // Check if timer expired
+    const currentQuestion = game?.questions[game.currentQuestionIndex];
+    if (currentQuestion?.hasTimer && timeRemaining === 0) {
+      return; // Timer expired, don't allow selection
+    }
     setSelectedAnswer(answerIndex);
   }
+
+  // Debounced handler for text answer input
+  function handleTextAnswerChange(value: string) {
+    setTextAnswerDisplay(value);
+    // Clear existing timeout
+    if (textAnswerDebounceRef.current) {
+      clearTimeout(textAnswerDebounceRef.current);
+    }
+    // Set new timeout to update actual textAnswer after 500ms
+    textAnswerDebounceRef.current = setTimeout(() => {
+      setTextAnswer(value);
+    }, 500);
+  }
+
+  // Sync textAnswerDisplay when textAnswer changes externally (e.g., from game state)
+  useEffect(() => {
+    setTextAnswerDisplay(textAnswer);
+    // Clear any pending debounce when textAnswer changes externally
+    if (textAnswerDebounceRef.current) {
+      clearTimeout(textAnswerDebounceRef.current);
+      textAnswerDebounceRef.current = null;
+    }
+    // Cleanup on unmount
+    return () => {
+      if (textAnswerDebounceRef.current) {
+        clearTimeout(textAnswerDebounceRef.current);
+        textAnswerDebounceRef.current = null;
+      }
+    };
+  }, [textAnswer]);
 
   async function handleSubmitAnswer() {
     const currentQuestion = game?.questions[game.currentQuestionIndex];
@@ -592,7 +629,8 @@ function PlayPageContent() {
     
     // Validate answer based on question type
     if (currentQuestion.isFillInBlank) {
-      if (!textAnswer.trim()) {
+      const answerToCheck = textAnswerDisplay.trim() || textAnswer.trim();
+      if (!answerToCheck) {
         alert("Please enter an answer");
         return;
       }
@@ -613,7 +651,9 @@ function PlayPageContent() {
     try {
       const wagerAmount = currentQuestion.hasWager && wager > 0 ? wager : undefined;
       if (currentQuestion.isFillInBlank) {
-        await submitAnswer(playerId, currentQuestion.id, null, textAnswer.trim(), wagerAmount);
+        // Use textAnswerDisplay for immediate value, or textAnswer if display hasn't synced yet
+        const answerToSubmit = textAnswerDisplay.trim() || textAnswer.trim();
+        await submitAnswer(playerId, currentQuestion.id, null, answerToSubmit, wagerAmount);
       } else {
         await submitAnswer(playerId, currentQuestion.id, selectedAnswer, undefined, wagerAmount);
       }
@@ -1064,7 +1104,7 @@ function PlayPageContent() {
               </div>
             ) : (
               <div className="mb-6 p-6 bg-slate-50 rounded-xl border-2 border-slate-200">
-                <p className="text-slate-600 font-medium">You didn't submit an answer for this question.</p>
+                <p className="text-slate-600 font-medium">You didn't submit an answer for this question. 😔</p>
               </div>
             )}
 
@@ -1322,12 +1362,16 @@ function PlayPageContent() {
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">Your Answer</label>
                 <textarea
-                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all resize-none"
+                  className={`w-full px-4 py-3 border-2 rounded-xl outline-none transition-all resize-none ${
+                    (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
+                      ? "border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed opacity-60"
+                      : "border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  }`}
                   rows={4}
                   placeholder="Type your answer here..."
-                  value={textAnswer}
-                  onChange={(e) => setTextAnswer(e.target.value)}
-                  disabled={submitted}
+                  value={textAnswerDisplay}
+                  onChange={(e) => handleTextAnswerChange(e.target.value)}
+                  disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
                 />
               </div>
             </div>
@@ -1337,20 +1381,22 @@ function PlayPageContent() {
                 className={`p-6 border-2 rounded-xl transition-all ${
                   selectedAnswer === 0
                     ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white border-green-600 shadow-lg scale-[1.02]"
-                    : submitted
-                    ? "bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                    : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
+                    ? "bg-slate-100 border-slate-300 cursor-not-allowed opacity-60"
                     : "bg-white border-slate-200 hover:border-green-300 hover:bg-green-50 hover:shadow-md"
                 }`}
                 onClick={() => handleAnswerSelect(0)}
-                disabled={submitted}
+                disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
               >
                 <div className="flex flex-col items-center gap-3">
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
                     selectedAnswer === 0
                       ? "bg-white"
+                      : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
+                      ? "bg-slate-300"
                       : "bg-slate-200"
                   }`}>
-                    <svg className={`w-8 h-8 ${selectedAnswer === 0 ? "text-green-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-8 h-8 ${selectedAnswer === 0 ? "text-green-600" : "text-slate-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
@@ -1361,20 +1407,22 @@ function PlayPageContent() {
                 className={`p-6 border-2 rounded-xl transition-all ${
                   selectedAnswer === 1
                     ? "bg-gradient-to-r from-red-500 to-rose-600 text-white border-red-600 shadow-lg scale-[1.02]"
-                    : submitted
-                    ? "bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                    : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
+                    ? "bg-slate-100 border-slate-300 cursor-not-allowed opacity-60"
                     : "bg-white border-slate-200 hover:border-red-300 hover:bg-red-50 hover:shadow-md"
                 }`}
                 onClick={() => handleAnswerSelect(1)}
-                disabled={submitted}
+                disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
               >
                 <div className="flex flex-col items-center gap-3">
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
                     selectedAnswer === 1
                       ? "bg-white"
+                      : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
+                      ? "bg-slate-300"
                       : "bg-slate-200"
                   }`}>
-                    <svg className={`w-8 h-8 ${selectedAnswer === 1 ? "text-red-600" : "text-slate-600"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-8 h-8 ${selectedAnswer === 1 ? "text-red-600" : "text-slate-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </div>
@@ -1390,15 +1438,15 @@ function PlayPageContent() {
                   className={`w-full text-sm md:text-lg text-left py-3 px-4 md:py-5 md:px-8 border-2 rounded-full transition-all ${
                     selectedAnswer === idx
                       ? "text-white border-secondary shadow-lg scale-[1.02]"
-                      : submitted
-                      ? "bg-slate-100 border-slate-200 cursor-not-allowed opacity-60"
+                      : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
+                      ? "bg-slate-100 border-slate-300 cursor-not-allowed opacity-60 text-slate-500"
                       : "bg-white border-slate-200 hover:border-secondary hover:shadow-md"
                   }`}
                   style={selectedAnswer === idx ? {
                     background: `linear-gradient(to right, var(--tertiary), var(--fourth-hover))`,
                   } : {}}
                   onClick={() => handleAnswerSelect(idx)}
-                  disabled={submitted}
+                  disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-medium">{choice}</span>
@@ -1409,8 +1457,16 @@ function PlayPageContent() {
           )}
 
           {currentQuestion.hasWager && !submitted && (
-            <div className="mb-6 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+            <div className={`mb-6 p-4 rounded-xl border-2 ${
+              (currentQuestion.hasTimer && timeRemaining === 0)
+                ? "bg-slate-50 border-slate-300 opacity-60"
+                : "bg-yellow-50 border-yellow-200"
+            }`}>
+              <label className={`block text-sm font-semibold mb-2 ${
+                (currentQuestion.hasTimer && timeRemaining === 0)
+                  ? "text-slate-500"
+                  : "text-slate-700"
+              }`}>
                 Wager (optional)
               </label>
               <div className="flex items-center gap-3">
@@ -1420,7 +1476,11 @@ function PlayPageContent() {
                   max={currentQuestion.maxWager || 10}
                   step="1"
                   inputMode="numeric"
-                  className="w-32 px-4 py-2 bg-white border-2 border-slate-200 rounded-xl focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200 outline-none transition-all"
+                  className={`w-32 px-4 py-2 rounded-xl outline-none transition-all ${
+                    (currentQuestion.hasTimer && timeRemaining === 0)
+                      ? "bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed"
+                      : "bg-white border-2 border-slate-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
+                  }`}
                   placeholder="0"
                   value={wager || ""}
                   onChange={(e) => {
@@ -1430,13 +1490,21 @@ function PlayPageContent() {
                     const maxWager = currentQuestion.maxWager || 10;
                     setWager(Math.max(0, Math.min(value, maxWager)));
                   }}
-                  disabled={submitted}
+                  disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
                 />
-                <span className="text-sm text-slate-600">
+                <span className={`text-sm ${
+                  (currentQuestion.hasTimer && timeRemaining === 0)
+                    ? "text-slate-500"
+                    : "text-slate-600"
+                }`}>
                   / {currentQuestion.maxWager || 10} max
                 </span>
               </div>
-              <p className="text-xs text-slate-800 mt-2">
+              <p className={`text-xs mt-2 ${
+                (currentQuestion.hasTimer && timeRemaining === 0)
+                  ? "text-slate-500"
+                  : "text-slate-800"
+              }`}>
                 {wager > 0 ? (
                   <>
                     If correct: +{wager + (currentQuestion.points * (currentQuestion.multiplier || 1))} points ({wager} wager + {currentQuestion.points * (currentQuestion.multiplier || 1)} base). If wrong: -{wager} points.
@@ -1464,7 +1532,7 @@ function PlayPageContent() {
               onClick={handleSubmitAnswer}
               disabled={
                 (currentQuestion.hasTimer && timeRemaining === 0) ||
-                (currentQuestion.isFillInBlank ? !textAnswer.trim() : selectedAnswer === null)
+                (currentQuestion.isFillInBlank ? !(textAnswerDisplay.trim() || textAnswer.trim()) : selectedAnswer === null)
               }
             >
               {currentQuestion.hasTimer && timeRemaining === 0 ? 'Ran out of time' : 'Submit answer'}

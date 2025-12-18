@@ -1257,7 +1257,13 @@ function HostGameContent() {
                                   defaultValue={playerAnswer.pointsEarned || 0}
                                   className="w-16 px-2 py-1 border border-slate-500 bg-white rounded text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
                                   id={`points-${player.id}`}
-                                  onChange={() => {
+                                  onChange={(e) => {
+                                    const maxPoints = currentQuestion.points * (currentQuestion.multiplier || 1);
+                                    const inputValue = Number(e.target.value);
+                                    // Clamp to max if value exceeds max
+                                    if (inputValue > maxPoints) {
+                                      e.target.value = maxPoints.toString();
+                                    }
                                     // Auto-save when points change
                                     autoSavePlayerScore(player.id, currentQuestion.id);
                                   }}
