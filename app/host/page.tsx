@@ -10,6 +10,7 @@ export default function HostPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [existingCode, setExistingCode] = useState("");
   const router = useRouter();
 
   async function handleCreate() {
@@ -28,6 +29,12 @@ export default function HostPage() {
       setError(err?.message || "Failed to create game. Please try again.");
       setLoading(false);
     }
+  }
+
+  function handleJoinExisting() {
+    if (!existingCode.trim()) return;
+    const code = existingCode.trim().toUpperCase();
+    router.push(`/host/${code}`);
   }
 
   return (
@@ -110,6 +117,39 @@ export default function HostPage() {
             </button>
           </div>
         </div>
+
+        {/* Existing Game Card */}
+        <div className="bg-white rounded-2xl shadow-xl p-8 space-y-4 mt-6">
+          <h2 className="text-xl font-semibold text-slate-700 text-center">
+            Already a host of a game?
+          </h2>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+              placeholder="Enter game code"
+              value={existingCode}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\D/g, '');
+                setExistingCode(value);
+              }}
+              onKeyDown={(e) => e.key === 'Enter' && handleJoinExisting()}
+              maxLength={6}
+            />
+            <button
+              className="px-5 py-2 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+              onClick={handleJoinExisting}
+              disabled={!existingCode.trim()}
+            >
+              <svg className="w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
         <div className="flex justify-center gap-4 text-purple-300 py-6"><Link className="hover:text-white" href="/terms">Terms</Link><Link className="hover:text-white" href="/privacy">Privacy</Link></div>
         <div className="animate-pop-in block m-auto w-40">
           <Link href="/">
