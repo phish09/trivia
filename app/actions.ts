@@ -894,13 +894,15 @@ export async function resetQuestion(gameId: string, questionId: string) {
 
 export async function resetGame(gameId: string) {
   const supabase = getSupabaseClient();
+  
   // Reset all player scores to 0
   await supabase
     .from("players")
     .update({ score: 0 })
     .eq("game_id", gameId);
 
-  // Delete all player answers
+  // Delete all player answers for this game
+  // We delete by joining through questions since player_answers only has question_id
   const { data: questions } = await supabase
     .from("questions")
     .select("id")
@@ -908,10 +910,16 @@ export async function resetGame(gameId: string) {
 
   if (questions && questions.length > 0) {
     const questionIds = questions.map((q: any) => q.id);
-    await supabase
+    // Delete all player answers for all questions in this game
+    const { error: deleteError } = await supabase
       .from("player_answers")
       .delete()
       .in("question_id", questionIds);
+    
+    if (deleteError) {
+      console.error("Error deleting player answers:", deleteError);
+      // Continue anyway - game reset should still proceed
+    }
   }
 
   // Reset game state

@@ -31,6 +31,7 @@ function PlayPageContent() {
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
   const textAnswerDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [textAnswerDisplay, setTextAnswerDisplay] = useState<string>("");
+  const [answersSectionExpanded, setAnswersSectionExpanded] = useState<boolean>(false);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -824,6 +825,163 @@ function PlayPageContent() {
               ))}
             </div>
           </div>
+
+          {/* Your Answers Review Section */}
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+            <button
+              onClick={() => setAnswersSectionExpanded(!answersSectionExpanded)}
+              className="w-full p-6 text-left hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center justify-between cursor-pointer">
+                  <h2 className="text-2xl font-bold text-slate-800">Your answers</h2>
+                <svg 
+                  className={`w-6 h-6 text-slate-500 transition-transform ${answersSectionExpanded ? 'rotate-180' : ''}`}
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+            </button>
+            
+            {answersSectionExpanded && (
+              <div className="px-6 pb-6 space-y-3">
+              {game.questions
+                .sort((a: any, b: any) => (a.questionOrder || 0) - (b.questionOrder || 0))
+                .map((question: any, index: number) => {
+                  const playerAnswer = game.playerAnswers?.find(
+                    (pa: any) => pa.playerId === playerId && pa.questionId === question.id
+                  );
+                  
+                  if (!playerAnswer) {
+                    // Player didn't answer this question
+                    return (
+                      <div key={question.id} className="border-2 border-slate-200 rounded-xl p-5 bg-slate-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="w-8 h-8 rounded-full bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-sm">
+                            -
+                          </span>
+                          <div>
+                            <span className="font-semibold text-black block text-[.6rem] tracking-wider uppercase">Question {index + 1}</span>
+                            <span className="text-sm text-slate-500">No answer submitted 😔</span>
+                          </div>
+                        </div>
+                        <p className="text-slate-700 font-bold">{question.text}</p>
+                      </div>
+                    );
+                  }
+                  
+                  const isCorrect = playerAnswer.isCorrect === true;
+                  const pointsEarned = playerAnswer.pointsEarned || 0;
+                  const hasWager = question.hasWager && playerAnswer.wager;
+                  
+                  // Determine correct answer display
+                  let correctAnswerDisplay = "";
+                  if (question.isTrueFalse) {
+                    correctAnswerDisplay = question.answer === 0 ? "True" : "False";
+                  } else if (question.isFillInBlank) {
+                    correctAnswerDisplay = question.fillInBlankAnswer || "N/A";
+                  } else {
+                    correctAnswerDisplay = question.choices?.[question.answer] || "N/A";
+                  }
+                  
+                  // Determine player answer display
+                  let playerAnswerDisplay = "";
+                  if (question.isTrueFalse) {
+                    playerAnswerDisplay = playerAnswer.answerIndex === 0 ? "True" : "False";
+                  } else if (question.isFillInBlank) {
+                    playerAnswerDisplay = playerAnswer.textAnswer || "No answer";
+                  } else {
+                    playerAnswerDisplay = question.choices?.[playerAnswer.answerIndex] || "No answer";
+                  }
+                  
+                  return (
+                    <div 
+                      key={question.id} 
+                      className={`border-2 rounded-xl p-5 transition-all ${
+                        isCorrect 
+                          ? 'bg-green-50 border-green-300' 
+                          : 'bg-red-50 border-red-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                            isCorrect ? 'bg-green-500' : 'bg-red-500'
+                          }`}>
+                            {isCorrect ? (
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            )}
+                          </div>
+                          <div>
+                            <div>
+                              <span className="font-semibold text-black text-[.6rem] tracking-wider uppercase block">Question {index + 1}</span>
+                              <span className={`text-sm font-medium ${
+                                isCorrect ? 'text-green-700' : 'text-red-700'
+                              }`}>
+                                {isCorrect ? 'Correct' : 'Incorrect'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`font-bold text-lg ${
+                            pointsEarned > 0 ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {pointsEarned > 0 ? '+' : ''}{pointsEarned} pts
+                          </div>
+                          {hasWager && (
+                            <div className="text-xs text-slate-500 mt-1">
+                              Wager: {playerAnswer.wager}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <p className="text-slate-800 font-bold mb-4">{question.text}</p>
+                      
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-xs font-semibold text-slate-600">Your answer:</span>
+                          <div className="mt-1 font-medium text-black">
+                            {playerAnswerDisplay}
+                          </div>
+                        </div>
+                        
+                        {!isCorrect && (
+                          <div className="mt-4 p-3 rounded-lg bg-white border-2 border-emerald-600">
+                            <span className="text-xs font-semibold text-slate-600">Correct answer:</span>
+                            <div className="text-black">
+                              {correctAnswerDisplay}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {hasWager && (
+                        <div className="mt-4 pt-3 border-t border-slate-300">
+                          <p className="text-xs text-slate-600">
+                            {isCorrect 
+                              ? `You wagered ${playerAnswer.wager} points and earned ${pointsEarned} total (${playerAnswer.wager} wager + ${question.points * (question.multiplier || 1)} base)`
+                              : `You wagered ${playerAnswer.wager} points and lost ${Math.abs(pointsEarned)} points`
+                            }
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Header */}
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 text-center">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-amber-600 bg-clip-text text-transparent mb-2">
