@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
-  message: string;
+  message: string | React.ReactNode;
   buttonText?: string;
   onButtonClick?: () => void;
   showCloseButton?: boolean;

@@ -2161,10 +2161,30 @@ function HostGameContent() {
         title={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete question' : 'End game'}
         message={
           confirmModalType === 'reset'
-            ? 'Are you sure you want to reset the entire game? This will:\n• Reset all player scores to 0\n• Clear all answers\n• Reset game state\n\nThis cannot be undone!'
+            ? (
+                <>
+                  <div className="mb-4">Are you sure you want to reset the entire game?:</div>
+                  <ul className="list-disc list-inside ml-4 mb-4">
+                    <li>Reset all player scores to 0</li>
+                    <li>Clear all answers</li>
+                    <li>Reset game state</li>
+                  </ul>
+                  <div><strong>This will not delete this game.</strong></div>
+                </>
+              )
             : confirmModalType === 'delete'
-            ? 'Are you sure you want to delete this question? This action cannot be undone.'
-            : 'Are you sure you want to end the game? Players will see the final scoreboard.\n\nThe game will be marked as ended.'
+            ? (
+                <>
+                  Are you sure you want to delete this question? <strong>This action cannot be undone.</strong>
+                </>
+              )
+            : (
+                <>
+                  Are you sure you want to end the game? Players will see the final scoreboard.
+                  {'\n\n'}
+                  <strong>This will not delete this game,</strong> it will just be marked as ended.
+                </>
+              )
         }
         isConfirmDialog={true}
         confirmText={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete' : 'End game'}

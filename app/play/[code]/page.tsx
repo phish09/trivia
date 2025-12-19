@@ -1009,7 +1009,11 @@ function PlayPageContent() {
             setShowLeaveModal(false);
           }}
           title="Leave game"
-          message="Are you sure you want to leave the game? Your progress will be lost."
+          message={
+            <>
+              Are you sure you want to leave the game?<br /><strong>Your progress will be lost.</strong>
+            </>
+          }
           isConfirmDialog={true}
           confirmText="Leave game"
           cancelText="Cancel"
