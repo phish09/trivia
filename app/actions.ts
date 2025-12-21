@@ -1051,3 +1051,242 @@ export async function manuallyAwardPoints(playerId: string, questionId: string, 
   }
 }
 
+// Helper to escape CSV fields
+function escapeCSVField(field: string): string {
+  if (field.includes(",") || field.includes('"') || field.includes("\n")) {
+    return `"${field.replace(/"/g, '""')}"`;
+  }
+  return field;
+}
+
+// Helper function to parse CSV rows (handles quoted values with commas)
+function parseCSVRow(row: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  
+  for (let i = 0; i < row.length; i++) {
+    const char = row[i];
+    if (char === '"') {
+      if (inQuotes && row[i + 1] === '"') {
+        current += '"';
+        i++; // Skip next quote
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+// Export questions to CSV format (Excel-compatible)
+export async function exportQuestions(gameId: string) {
+  const supabase = getSupabaseClient();
+  const { data: questions } = await supabase
+    .from("questions")
+    .select("*")
+    .eq("game_id", gameId)
+    .order("question_order", { ascending: true });
+  
+  if (!questions || questions.length === 0) {
+    throw new Error("No questions to export");
+  }
+  
+  // Convert to CSV format (Excel can open CSV files)
+  const csvRows = [
+    // Header row
+    ["question_text", "choice_1", "choice_2", "choice_3", "choice_4", 
+     "correct_answer", "points", "multiplier", "question_type", 
+     "has_timer", "timer_seconds", "fill_in_blank_answer", 
+     "has_wager", "max_wager"].join(","),
+    // Data rows
+    ...questions.map(q => {
+      const type = q.is_fill_in_blank ? "fill_in_blank" 
+                 : q.is_true_false ? "true_false" 
+                 : "multiple_choice";
+      const choices = q.choices || [];
+      
+      // Determine correct answer format
+      let answer: string;
+      if (q.is_fill_in_blank) {
+        // For fill-in-blank, use fill_in_blank_answer, or empty string if not set
+        answer = q.fill_in_blank_answer || "";
+        // Warn if fill-in-blank question doesn't have an answer
+        if (!answer) {
+          console.warn(`Fill-in-blank question "${q.text?.substring(0, 50)}..." is missing fill_in_blank_answer`);
+        }
+      } else if (q.is_true_false) {
+        answer = q.answer === 0 ? "True" : "False";
+      } else {
+        answer = String(q.answer); // Index of correct choice (0-based)
+      }
+      
+      return [
+        escapeCSVField(q.text || ""),
+        escapeCSVField(choices[0] || ""),
+        escapeCSVField(choices[1] || ""),
+        escapeCSVField(choices[2] || ""),
+        escapeCSVField(choices[3] || ""),
+        escapeCSVField(answer),
+        q.points || 10,
+        q.multiplier || 1,
+        type,
+        q.has_timer ? "true" : "false",
+        q.timer_seconds || "",
+        escapeCSVField(q.fill_in_blank_answer || ""),
+        q.has_wager ? "true" : "false",
+        q.max_wager || ""
+      ].join(",");
+    })
+  ];
+  
+  return csvRows.join("\n");
+}
+
+// Import questions from CSV/Excel (appends to existing questions by default)
+export async function importQuestions(gameId: string, csvContent: string) {
+  const supabase = getSupabaseClient();
+  
+  const lines = csvContent.split("\n").filter(line => line.trim());
+  if (lines.length < 2) {
+    throw new Error("CSV file must have at least a header and one data row");
+  }
+  
+  const headers = parseCSVRow(lines[0]).map(h => h.trim().replace(/^"|"$/g, ""));
+  const dataRows = lines.slice(1);
+  
+  // Validate that we have the expected headers
+  const expectedHeaders = ["question_text", "correct_answer", "question_type"];
+  const hasRequiredHeaders = expectedHeaders.every(h => headers.includes(h));
+  if (!hasRequiredHeaders) {
+    throw new Error(`CSV file is missing required headers. Expected headers: ${expectedHeaders.join(", ")}. Found: ${headers.join(", ")}`);
+  }
+  
+  const results = [];
+  const errors: string[] = [];
+  
+  for (let i = 0; i < dataRows.length; i++) {
+    const row = dataRows[i];
+    if (!row.trim()) continue; // Skip empty rows
+    
+    try {
+      // Parse CSV row (handling quoted values)
+      const values = parseCSVRow(row);
+      
+      if (values.length < headers.length) {
+        errors.push(`Row ${i + 2}: Not enough columns (expected ${headers.length}, got ${values.length})`);
+        continue;
+      }
+      
+      const rowData: any = {};
+      headers.forEach((header, index) => {
+        const value = values[index] || "";
+        // Remove surrounding quotes and trim whitespace
+        rowData[header] = value.replace(/^"|"$/g, "").trim();
+      });
+      
+      // Validate required fields
+      if (!rowData.question_text) {
+        errors.push(`Row ${i + 2}: Missing question_text`);
+        continue;
+      }
+      
+      // Convert to question format
+      const questionType = rowData.question_type || "multiple_choice";
+      const isFillInBlank = questionType === "fill_in_blank";
+      const isTrueFalse = questionType === "true_false";
+      
+      const choices = isFillInBlank ? [] 
+                    : isTrueFalse ? ["True", "False"]
+                    : [
+                        rowData.choice_1,
+                        rowData.choice_2,
+                        rowData.choice_3,
+                        rowData.choice_4
+                      ].filter(c => c && c.trim());
+      
+      // Validate choices for multiple choice
+      if (!isFillInBlank && !isTrueFalse && choices.length < 2) {
+        errors.push(`Row ${i + 2}: Multiple choice questions need at least 2 choices`);
+        continue;
+      }
+      
+      // Parse answer
+      let answer: number = 0;
+      let fillInBlankAnswer: string | undefined = undefined;
+      
+      if (isFillInBlank) {
+        answer = -1; // Special value
+        // For fill-in-blank, the answer is stored in correct_answer column (primary)
+        // fill_in_blank_answer column is also populated but correct_answer takes precedence
+        const correctAnswerValue = (rowData.correct_answer || "").trim();
+        const fillInBlankValue = (rowData.fill_in_blank_answer || "").trim();
+        fillInBlankAnswer = correctAnswerValue || fillInBlankValue;
+        
+        if (!fillInBlankAnswer || fillInBlankAnswer === "") {
+          // Skip fill-in-blank questions without answers - they can't be used without a correct answer
+          errors.push(`Row ${i + 2}: Skipped fill-in-blank question "${rowData.question_text.substring(0, 50)}..." - missing required answer. Please add the answer in the correct_answer or fill_in_blank_answer column.`);
+          continue;
+        }
+      } else if (isTrueFalse) {
+        const answerText = (rowData.correct_answer || "").trim();
+        answer = answerText.toLowerCase() === "true" ? 0 : 1;
+      } else {
+        // Multiple choice - answer should be index (0-based)
+        const answerIndex = parseInt(rowData.correct_answer);
+        if (isNaN(answerIndex) || answerIndex < 0 || answerIndex >= choices.length) {
+          errors.push(`Row ${i + 2}: Invalid answer index (must be 0-${choices.length - 1})`);
+          continue;
+        }
+        answer = answerIndex;
+      }
+      
+      // Create question - addQuestion automatically handles ordering by appending to the end
+      const question = await addQuestion(gameId, {
+        text: rowData.question_text,
+        choices,
+        answer,
+        points: parseInt(rowData.points) || 10,
+        multiplier: parseInt(rowData.multiplier) || 1,
+        isFillInBlank,
+        isTrueFalse,
+        hasTimer: rowData.has_timer === "true",
+        timerSeconds: rowData.timer_seconds ? parseInt(rowData.timer_seconds) : undefined,
+        fillInBlankAnswer,
+        hasWager: rowData.has_wager === "true",
+        maxWager: rowData.has_wager === "true" && rowData.max_wager ? parseInt(rowData.max_wager) : undefined,
+      });
+      
+      results.push(question);
+    } catch (error: any) {
+      errors.push(`Row ${i + 2}: ${error.message || "Unknown error"}`);
+    }
+  }
+  
+  if (errors.length > 0 && results.length === 0) {
+    throw new Error(`Import failed:\n${errors.join("\n")}`);
+  }
+  
+  if (errors.length > 0) {
+    // Return partial success with warnings
+    return {
+      success: true,
+      imported: results.length,
+      errors: errors,
+      warnings: `Imported ${results.length} questions with ${errors.length} errors`
+    };
+  }
+  
+  return {
+    success: true,
+    imported: results.length,
+    errors: []
+  };
+}
+

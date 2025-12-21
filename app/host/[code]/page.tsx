@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams } from "next/navigation";
-import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, deleteQuestion } from "../../actions";
+import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, deleteQuestion, exportQuestions, importQuestions } from "../../actions";
 import { useRouter } from "next/navigation";
 import { getSupabaseClientForRealtime } from "@/lib/db";
 import Modal from "@/components/Modal";
@@ -67,6 +67,11 @@ function HostGameContent() {
   const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | 'delete' | null>(null);
   const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{success: boolean, message: string} | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     checkPassword();
@@ -602,6 +607,72 @@ function HostGameContent() {
     }
   }
 
+  async function handleExport() {
+    if (!game) return;
+    setExporting(true);
+    try {
+      const csv = await exportQuestions(game.id);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `trivia-questions-${game.code}-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error: any) {
+      console.error("Export failed:", error);
+      alert(`Failed to export questions: ${error.message}`);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleImport() {
+    if (!importFile || !game) return;
+    
+    setImporting(true);
+    setImportResult(null);
+    
+    try {
+      const text = await importFile.text();
+      const result = await importQuestions(game.id, text);
+      
+      if (result.errors && result.errors.length > 0) {
+        const errorPreview = result.errors.slice(0, 5).join("\n");
+        const moreErrors = result.errors.length > 5 ? `\n... and ${result.errors.length - 5} more errors` : "";
+        setImportResult({
+          success: true,
+          message: `Imported ${result.imported} questions successfully!\n\nSome rows had errors:\n${errorPreview}${moreErrors}`
+        });
+      } else {
+        setImportResult({
+          success: true,
+          message: `Successfully imported ${result.imported} questions!`
+        });
+      }
+      
+      // Refresh game data
+      await loadGame();
+      
+      // Reset form after a delay
+      setTimeout(() => {
+        setShowImportModal(false);
+        setImportFile(null);
+        setImportResult(null);
+      }, 3000);
+    } catch (error: any) {
+      console.error("Import failed:", error);
+      setImportResult({
+        success: false,
+        message: `Failed to import questions:\n${error.message}`
+      });
+    } finally {
+      setImporting(false);
+    }
+  }
+
   function handleDragStart(e: React.DragEvent, questionId: string) {
     setDraggedQuestionId(questionId);
     e.dataTransfer.effectAllowed = "move";
@@ -913,6 +984,19 @@ function HostGameContent() {
                 <h2 className="text-2xl font-bold text-slate-800 mb-1">Game ended</h2>
                 <p className="text-slate-600">The winner is <span className="font-bold text-yellow-700">{sortedPlayers[0]?.username || "N/A"}</span> with <span className="font-bold text-yellow-700">{sortedPlayers[0]?.score || 0} points</span>!</p>
               </div>
+              {game.questions && game.questions.length > 0 && (
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="px-6 py-3 bg-white text-primary rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  title="Export questions to CSV/Excel file"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  {exporting ? "Exporting..." : "Export your game questions"}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -1809,15 +1893,40 @@ function HostGameContent() {
               {game.questions.length}
             </span>
           </div>
-          <button
-            onClick={() => toggleSection('questions')}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            title={minimizedSections.questions ? "Expand" : "Minimize"}
-          >
-            <svg className={`w-5 h-5 text-slate-600 transition-transform ${minimizedSections.questions ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {game.questions.length > 0 && (
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                title="Export questions to CSV/Excel file"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                {exporting ? "Exporting..." : "Export"}
+              </button>
+            )}
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-4 py-2 text-sm bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 font-medium transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+              title="Import questions from CSV/Excel file"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Import
+            </button>
+            <button
+              onClick={() => toggleSection('questions')}
+              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+              title={minimizedSections.questions ? "Expand" : "Minimize"}
+            >
+              <svg className={`w-5 h-5 text-slate-600 transition-transform ${minimizedSections.questions ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </button>
+          </div>
         </div>
         {!minimizedSections.questions && (
           <>
@@ -2197,6 +2306,112 @@ function HostGameContent() {
         }}
         showCloseButton={true}
       />
+
+      {/* Import Modal */}
+      {showImportModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => {
+            if (!importing && !importResult) {
+              setShowImportModal(false);
+              setImportFile(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-4 transform transition-all duration-200 scale-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-bold text-slate-800">Import Questions</h2>
+              {!importing && (
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportResult(null);
+                  }}
+                  className="p-1 hover:bg-slate-100 rounded-lg transition-colors"
+                  aria-label="Close"
+                >
+                  <svg className="w-6 h-6 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            {/* Message */}
+            <div className="text-slate-600">
+              {importResult ? (
+                <div className={`p-4 rounded-xl ${importResult.success ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
+                  <pre className="whitespace-pre-wrap text-sm font-medium">{importResult.message}</pre>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Select CSV/Excel file:</label>
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => setImportFile(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                      disabled={importing}
+                    />
+                    <p className="text-xs text-slate-500 mt-2">
+                      File should match the format from exported questions. Imported questions will be added to your existing {game?.questions.length || 0} questions.
+                    </p>
+                  </div>
+                  {game && game.questions.length > 0 && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
+                      <p className="text-sm text-blue-800">
+                        <strong>Note:</strong> Imported questions will be appended to your existing {game.questions.length} question{game.questions.length !== 1 ? 's' : ''}.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Buttons */}
+            <div className="flex pt-2 gap-3 justify-end">
+              {importResult ? (
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setImportResult(null);
+                  }}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
+                >
+                  Close
+                </button>
+              ) : (
+                <>
+                  <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                  }}
+                  disabled={importing}
+                  className="px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold shadow-sm hover:shadow hover:bg-slate-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImport}
+                  disabled={!importFile || importing}
+                  className="px-6 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {importing ? "Importing..." : "Import"}
+                </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
