@@ -3,3 +3,4 @@ ALTER TABLE questions ADD COLUMN IF NOT EXISTS is_true_false BOOLEAN DEFAULT fal
 
 
 
+

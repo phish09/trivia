@@ -667,7 +667,27 @@ export async function revealAnswers(gameId: string, questionId: string) {
     // Now update player scores based on the points_earned values
     // This is when scores should actually change for fill-in-the-blank questions
     for (const answer of answers) {
-      const pointsEarned = answer.points_earned || 0;
+      const basePointsEarned = answer.points_earned || 0;
+      const isCorrect = answer.is_correct || false;
+      const wagerAmount = answer.wager || 0;
+      const basePoints = question.points * (question.multiplier || 1);
+      
+      // Calculate final points earned based on wagering
+      let finalPointsEarned = 0;
+      if (question.has_wager && wagerAmount > 0) {
+        // If wagering is enabled and player wagered
+        if (isCorrect) {
+          // Player gains the wager amount PLUS the base points awarded by host
+          // Note: basePointsEarned already includes multiplier, so we use it directly
+          finalPointsEarned = wagerAmount + basePointsEarned;
+        } else {
+          // Player loses the wager amount (negative)
+          finalPointsEarned = -wagerAmount;
+        }
+      } else {
+        // Normal scoring without wagering - use the points awarded by host
+        finalPointsEarned = basePointsEarned;
+      }
       
       // Get current player score
       const { data: player } = await supabase
@@ -677,9 +697,17 @@ export async function revealAnswers(gameId: string, questionId: string) {
         .single();
 
       const currentScore = player?.score || 0;
-      // For fill-in-the-blank, we add the points_earned (which was set by manuallyAwardPoints)
+      // For fill-in-the-blank, we add the final points earned (accounting for wagering)
       // Since this is the first time scores are being applied, we just add the points
-      const newScore = currentScore + pointsEarned;
+      const newScore = currentScore + finalPointsEarned;
+
+      // Update player answer with final points earned (for display purposes)
+      await supabase
+        .from("player_answers")
+        .update({
+          points_earned: finalPointsEarned,
+        })
+        .eq("id", answer.id);
 
       // Update player score (allow negative scores for wagering)
       await supabase
