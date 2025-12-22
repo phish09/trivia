@@ -263,9 +263,14 @@ function PlayPageContent() {
   }
 
   async function playNotificationSound() {
-    if (!soundEnabled || !audioContextRef.current) return;
+    if (!soundEnabled) return;
     
     try {
+      // Ensure audio is unlocked (creates context if needed)
+      await unlockAudio();
+      
+      if (!audioContextRef.current) return;
+      
       const audioContext = audioContextRef.current;
       
       // Ensure audio context is running (mobile browsers)
@@ -273,9 +278,8 @@ function PlayPageContent() {
         await audioContext.resume();
       }
       
-      // Wait a tiny bit to ensure context is ready
       if (audioContext.state !== 'running') {
-        return; // Can't play if context isn't running
+        return;
       }
       
       const oscillator = audioContext.createOscillator();
@@ -297,6 +301,171 @@ function PlayPageContent() {
       oscillator.stop(audioContext.currentTime + 0.3);
     } catch (error) {
       console.debug("Could not play notification sound:", error);
+    }
+  }
+
+  async function playCorrectSound() {
+    if (!soundEnabled) return;
+    
+    try {
+      // Ensure audio is unlocked (creates context if needed)
+      await unlockAudio();
+      
+      if (!audioContextRef.current) return;
+      
+      const audioContext = audioContextRef.current;
+      
+      // Ensure audio context is running (mobile browsers)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      if (audioContext.state !== 'running') {
+        return;
+      }
+      
+      // Success sound: ascending three-tone chime (C-E-G)
+      const oscillator1 = audioContext.createOscillator();
+      const oscillator2 = audioContext.createOscillator();
+      const oscillator3 = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator1.connect(gainNode);
+      oscillator2.connect(gainNode);
+      oscillator3.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // C5, E5, G5 ascending
+      oscillator1.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+      oscillator2.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+      oscillator3.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.2); // G5
+      
+      oscillator1.type = 'sine';
+      oscillator2.type = 'sine';
+      oscillator3.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.25, audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.4);
+
+      oscillator1.start(audioContext.currentTime);
+      oscillator1.stop(audioContext.currentTime + 0.4);
+      oscillator2.start(audioContext.currentTime + 0.1);
+      oscillator2.stop(audioContext.currentTime + 0.4);
+      oscillator3.start(audioContext.currentTime + 0.2);
+      oscillator3.stop(audioContext.currentTime + 0.4);
+    } catch (error) {
+      console.debug("Could not play correct sound:", error);
+    }
+  }
+
+  async function playWrongSound() {
+    if (!soundEnabled) return;
+    
+    try {
+      // Ensure audio is unlocked (creates context if needed)
+      await unlockAudio();
+      
+      if (!audioContextRef.current) return;
+      
+      const audioContext = audioContextRef.current;
+      
+      // Ensure audio context is running (mobile browsers)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      if (audioContext.state !== 'running') {
+        return;
+      }
+      
+      // Wrong answer sound: descending two-tone (G-E)
+      const oscillator1 = audioContext.createOscillator();
+      const oscillator2 = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator1.connect(gainNode);
+      oscillator2.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // G4, E4 descending
+      oscillator1.frequency.setValueAtTime(392.00, audioContext.currentTime); // G4
+      oscillator2.frequency.setValueAtTime(329.63, audioContext.currentTime + 0.15); // E4
+      
+      oscillator1.type = 'sine';
+      oscillator2.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.2, audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.35);
+
+      oscillator1.start(audioContext.currentTime);
+      oscillator1.stop(audioContext.currentTime + 0.35);
+      oscillator2.start(audioContext.currentTime + 0.15);
+      oscillator2.stop(audioContext.currentTime + 0.35);
+    } catch (error) {
+      console.debug("Could not play wrong sound:", error);
+    }
+  }
+
+  async function playGameEndSound() {
+    if (!soundEnabled) return;
+    
+    try {
+      // Ensure audio is unlocked (creates context if needed)
+      await unlockAudio();
+      
+      if (!audioContextRef.current) return;
+      
+      const audioContext = audioContextRef.current;
+      
+      // Ensure audio context is running (mobile browsers)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      if (audioContext.state !== 'running') {
+        return;
+      }
+      
+      // Game end sound: celebratory fanfare (C-E-G-C ascending)
+      const oscillator1 = audioContext.createOscillator();
+      const oscillator2 = audioContext.createOscillator();
+      const oscillator3 = audioContext.createOscillator();
+      const oscillator4 = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator1.connect(gainNode);
+      oscillator2.connect(gainNode);
+      oscillator3.connect(gainNode);
+      oscillator4.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // C5, E5, G5, C6 ascending fanfare
+      oscillator1.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+      oscillator2.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.15); // E5
+      oscillator3.frequency.setValueAtTime(783.99, audioContext.currentTime + 0.3); // G5
+      oscillator4.frequency.setValueAtTime(1046.50, audioContext.currentTime + 0.45); // C6
+      
+      oscillator1.type = 'sine';
+      oscillator2.type = 'sine';
+      oscillator3.type = 'sine';
+      oscillator4.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.7);
+
+      oscillator1.start(audioContext.currentTime);
+      oscillator1.stop(audioContext.currentTime + 0.7);
+      oscillator2.start(audioContext.currentTime + 0.15);
+      oscillator2.stop(audioContext.currentTime + 0.7);
+      oscillator3.start(audioContext.currentTime + 0.3);
+      oscillator3.stop(audioContext.currentTime + 0.7);
+      oscillator4.start(audioContext.currentTime + 0.45);
+      oscillator4.stop(audioContext.currentTime + 0.7);
+    } catch (error) {
+      console.debug("Could not play game end sound:", error);
     }
   }
 
@@ -449,6 +618,49 @@ function PlayPageContent() {
     // Update previous question index
     previousQuestionIndexRef.current = currentQuestionIndex;
   }, [game?.currentQuestionIndex, game?.answersRevealed, soundEnabled]);
+
+  // Play correct/wrong sound when answers are revealed
+  const previousAnswersRevealedRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (!game || !soundEnabled) return;
+
+    const answersJustRevealed = game.answersRevealed && !previousAnswersRevealedRef.current;
+    
+    if (answersJustRevealed && game.currentQuestionIndex !== null && game.currentQuestionIndex !== undefined) {
+      // Find the player's answer for the current question
+      const currentQuestion = game.questions?.[game.currentQuestionIndex];
+      if (currentQuestion && game.playerAnswers) {
+        const playerAnswer = game.playerAnswers.find(
+          (pa: any) => pa.questionId === currentQuestion.id && pa.playerId === playerId
+        );
+        
+        if (playerAnswer) {
+          // Play appropriate sound based on whether answer was correct
+          if (playerAnswer.isCorrect === true) {
+            playCorrectSound();
+          } else {
+            playWrongSound();
+          }
+        }
+      }
+    }
+
+    // Update previous state
+    previousAnswersRevealedRef.current = game.answersRevealed || false;
+  }, [game?.answersRevealed, game?.currentQuestionIndex, game?.playerAnswers, soundEnabled, playerId]);
+
+  // Play game end sound when game ends
+  useEffect(() => {
+    if (!game || !soundEnabled) return;
+
+    const isGameEnded = game.gameEnded || false;
+    const justEnded = isGameEnded && !previousGameEndedRef.current;
+    
+    if (justEnded) {
+      playGameEndSound();
+      // Note: previousGameEndedRef is also updated in the confetti useEffect
+    }
+  }, [game?.gameEnded, soundEnabled]);
 
   // Timer countdown logic for player side - using server-provided time
   useEffect(() => {
