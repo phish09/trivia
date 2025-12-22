@@ -33,12 +33,12 @@ function PlayPageContent() {
   const [textAnswerDisplay, setTextAnswerDisplay] = useState<string>("");
   const [answersSectionExpanded, setAnswersSectionExpanded] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    // Check localStorage for saved preference, default to true
+    // Check localStorage for saved preference, default to false (requires user consent)
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('trivia_sound_enabled');
-      return saved !== null ? saved === 'true' : true;
+      return saved !== null ? saved === 'true' : false;
     }
-    return true;
+    return false;
   });
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioUnlockedRef = useRef<boolean>(false);
@@ -238,9 +238,18 @@ function PlayPageContent() {
         await audioContext.resume();
       }
       
+      // Ensure context is running before proceeding
+      if (audioContext.state !== 'running') {
+        // Wait a bit and try again
+        await new Promise(resolve => setTimeout(resolve, 50));
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
+      }
+      
       // Play a silent sound immediately to unlock audio on mobile
       // This is required for mobile browsers to allow future audio playback
-      if (!audioUnlockedRef.current) {
+      if (!audioUnlockedRef.current && audioContext.state === 'running') {
         const silentOscillator = audioContext.createOscillator();
         const silentGain = audioContext.createGain();
         
@@ -474,11 +483,13 @@ function PlayPageContent() {
     setSoundEnabled(newValue);
     localStorage.setItem('trivia_sound_enabled', String(newValue));
     
-    // Unlock audio when user enables sound
+    // Unlock audio when user enables sound (user interaction required for browser consent)
     if (newValue) {
       await unlockAudio();
-      // Play a quick test sound after unlocking
-      setTimeout(() => playNotificationSound(), 50);
+      // Wait a bit to ensure audio context is fully ready, then play test sound
+      setTimeout(async () => {
+        await playNotificationSound();
+      }, 100);
     }
   }
 
@@ -2093,9 +2104,9 @@ function PlayPageContent() {
           )}
 
           {submitted ? (
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6 text-center">
-              <p className="text-blue-800 font-semibold flex items-center justify-center gap-2 text-sm">
-                Answer submitted. Waiting for other players.
+            <div className="bg-primary/10 border-2 border-secondary rounded-xl p-6 text-center">
+              <p className="text-secondary font-semibold flex flex-col items-center justify-center gap-1 text-sm">
+                Answer submitted.<br /><span className="text-xs text-slate-500">Waiting for other players...</span>
               </p>
             </div>
           ) : (
@@ -2137,7 +2148,7 @@ function PlayPageContent() {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                  <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold !leading-none text-sm ${
                     index === 0 ? "bg-yellow-400 text-yellow-900" :
                     index === 1 ? "bg-slate-400 text-white" :
                     index === 2 ? "bg-orange-400 text-orange-900" :
