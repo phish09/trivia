@@ -32,6 +32,16 @@ function PlayPageContent() {
   const textAnswerDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [textAnswerDisplay, setTextAnswerDisplay] = useState<string>("");
   const [answersSectionExpanded, setAnswersSectionExpanded] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    // Check localStorage for saved preference, default to true
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('trivia_sound_enabled');
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioUnlockedRef = useRef<boolean>(false);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -210,6 +220,84 @@ function PlayPageContent() {
     }
   }
 
+  // Sound management functions
+  function unlockAudio() {
+    if (!audioUnlockedRef.current && typeof window !== 'undefined') {
+      try {
+        // Create audio context on first user interaction
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContextClass();
+        audioUnlockedRef.current = true;
+      } catch (error) {
+        console.debug("Could not unlock audio:", error);
+      }
+    }
+  }
+
+  function playNotificationSound() {
+    if (!soundEnabled || !audioContextRef.current) return;
+    
+    try {
+      const audioContext = audioContextRef.current;
+      
+      // Resume audio context if suspended (mobile browsers)
+      if (audioContext.state === 'suspended') {
+        audioContext.resume();
+      }
+      
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      // Pleasant notification sound: two-tone chime
+      oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
+      oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
+      oscillator.type = 'sine';
+      
+      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+      gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+
+      oscillator.start(audioContext.currentTime);
+      oscillator.stop(audioContext.currentTime + 0.3);
+    } catch (error) {
+      console.debug("Could not play notification sound:", error);
+    }
+  }
+
+  function toggleSound() {
+    const newValue = !soundEnabled;
+    setSoundEnabled(newValue);
+    localStorage.setItem('trivia_sound_enabled', String(newValue));
+    
+    // Unlock audio when user enables sound
+    if (newValue) {
+      unlockAudio();
+      // Play a quick test sound
+      setTimeout(() => playNotificationSound(), 100);
+    }
+  }
+
+  // Unlock audio on mount if sound is enabled
+  useEffect(() => {
+    if (soundEnabled && typeof window !== 'undefined') {
+      // Try to unlock audio on any user interaction
+      const handleInteraction = () => {
+        unlockAudio();
+        window.removeEventListener('click', handleInteraction);
+        window.removeEventListener('touchstart', handleInteraction);
+      };
+      window.addEventListener('click', handleInteraction);
+      window.addEventListener('touchstart', handleInteraction);
+      return () => {
+        window.removeEventListener('click', handleInteraction);
+        window.removeEventListener('touchstart', handleInteraction);
+      };
+    }
+  }, [soundEnabled]);
+
   // Load game when playerId is set
   useEffect(() => {
     if (playerId && !verifying) {
@@ -295,7 +383,7 @@ function PlayPageContent() {
 
   // Play notification sound when new question appears
   useEffect(() => {
-    if (!game) return;
+    if (!game || !soundEnabled) return;
 
     const currentQuestionIndex = game.currentQuestionIndex;
     const previousQuestionIndex = previousQuestionIndexRef.current;
@@ -309,35 +397,12 @@ function PlayPageContent() {
       previousQuestionIndex !== currentQuestionIndex &&
       !game.answersRevealed
     ) {
-      // Play notification sound
-      try {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-
-        // Pleasant notification sound: two-tone chime
-        oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
-        oscillator.frequency.setValueAtTime(659.25, audioContext.currentTime + 0.1); // E5
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.01);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-
-        oscillator.start(audioContext.currentTime);
-        oscillator.stop(audioContext.currentTime + 0.3);
-      } catch (error) {
-        // Silently fail if audio context is not available (e.g., user hasn't interacted with page)
-        console.debug("Could not play notification sound:", error);
-      }
+      playNotificationSound();
     }
 
     // Update previous question index
     previousQuestionIndexRef.current = currentQuestionIndex;
-  }, [game?.currentQuestionIndex, game?.answersRevealed]);
+  }, [game?.currentQuestionIndex, game?.answersRevealed, soundEnabled]);
 
   // Timer countdown logic for player side - using server-provided time
   useEffect(() => {
@@ -1032,7 +1097,7 @@ function PlayPageContent() {
     return (
       <div className="md:min-h-screen p-6">
         <div className="max-w-4xl mx-auto">
-        <div className="animate-pop-in block m-auto w-40 mb-6">
+        <div className="animate-pop-in block m-auto w-32 mb-6">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -1116,7 +1181,28 @@ function PlayPageContent() {
       <div className="p-6">
         <div className="mb-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">Game code: {code}</h1>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Sound Toggle Button */}
+            <button
+              onClick={() => {
+                unlockAudio();
+                toggleSound();
+              }}
+              className="p-1.5 rounded-full hover:bg-gray-100 transition-colors"
+              title={soundEnabled ? "Sound enabled - Click to disable" : "Sound disabled - Click to enable"}
+              aria-label={soundEnabled ? "Disable sound" : "Enable sound"}
+            >
+              {soundEnabled ? (
+                <svg className="w-5 h-5 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              )}
+            </button>
             <button
               className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
               onClick={loadGame}
@@ -1174,7 +1260,7 @@ function PlayPageContent() {
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
-        <div className="animate-pop-in inline-block w-36">
+        <div className="animate-pop-in inline-block w-32">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -1202,8 +1288,31 @@ function PlayPageContent() {
             </defs>
             </svg>
         </div>
-        <div className="px-3 py-1 bg-purple-100 text-primary rounded-full text-sm font-bold">
-          Question {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
+        <div className="flex items-center gap-2">
+          <div className="px-3 py-1 bg-white/60 text-primary rounded-full text-xs font-bold">
+            Question {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
+          </div>
+          {/* Sound Toggle Button */}
+          <button
+            onClick={() => {
+              unlockAudio();
+              toggleSound();
+            }}
+            className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
+            title={soundEnabled ? "Sound enabled - Click to disable" : "Sound disabled - Click to enable"}
+            aria-label={soundEnabled ? "Disable sound" : "Enable sound"}
+          >
+            {soundEnabled ? (
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 text-white opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
 
@@ -1451,7 +1560,7 @@ function PlayPageContent() {
       <div className="max-w-4xl mx-auto space-y-6">
       {/* Header with Logo and Question Indicator */}
       <div className="flex items-center justify-between mb-6">
-        <div className="animate-pop-in inline-block w-36">
+        <div className="animate-pop-in inline-block w-32">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -1479,8 +1588,31 @@ function PlayPageContent() {
             </defs>
             </svg>
         </div>
-        <div className="px-3 py-1 bg-white/60 text-primary rounded-full text-sm font-bold">
-          Question {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
+        <div className="flex items-center gap-2">
+          <div className="px-3 py-1 bg-white/60 text-primary rounded-full text-xs font-bold">
+            Question {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
+          </div>
+          {/* Sound Toggle Button */}
+          <button
+            onClick={() => {
+              unlockAudio();
+              toggleSound();
+            }}
+            className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
+            title={soundEnabled ? "Sound enabled - Click to disable" : "Sound disabled - Click to enable"}
+            aria-label={soundEnabled ? "Disable sound" : "Enable sound"}
+          >
+            {soundEnabled ? (
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5 text-white opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            )}
+          </button>
         </div>
       </div>
         {/* Question Card */}
