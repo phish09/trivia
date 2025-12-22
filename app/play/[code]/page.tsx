@@ -1097,7 +1097,9 @@ function PlayPageContent() {
     return (
       <div className="md:min-h-screen p-6">
         <div className="max-w-4xl mx-auto">
-        <div className="animate-pop-in block m-auto w-32 mb-6">
+          {/* Header with Logo and Sound Toggle */}
+          <div className="flex items-center justify-between mb-6">
+            <div className="animate-pop-in inline-block w-32">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
 <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
 <rect fill="white" y="19.1168" width="203" height="87"/>
@@ -1124,7 +1126,29 @@ function PlayPageContent() {
             </linearGradient>
             </defs>
             </svg>
-        </div>
+            </div>
+            {/* Sound Toggle Button */}
+            <button
+              onClick={() => {
+                unlockAudio();
+                toggleSound();
+              }}
+              className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
+              title={soundEnabled ? "Sound enabled - Click to disable" : "Sound disabled - Click to enable"}
+              aria-label={soundEnabled ? "Disable sound" : "Enable sound"}
+            >
+              {soundEnabled ? (
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+              ) : (
+                <svg className="w-6 h-6 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                </svg>
+              )}
+            </button>
+          </div>
           <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200 text-center">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
               Game code: {code}
