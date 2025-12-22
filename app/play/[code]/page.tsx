@@ -221,28 +221,61 @@ function PlayPageContent() {
   }
 
   // Sound management functions
-  function unlockAudio() {
-    if (!audioUnlockedRef.current && typeof window !== 'undefined') {
-      try {
-        // Create audio context on first user interaction
+  async function unlockAudio() {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      // Create audio context if it doesn't exist
+      if (!audioContextRef.current) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
         audioContextRef.current = new AudioContextClass();
-        audioUnlockedRef.current = true;
-      } catch (error) {
-        console.debug("Could not unlock audio:", error);
       }
+      
+      const audioContext = audioContextRef.current;
+      
+      // Resume audio context if suspended (mobile browsers require this)
+      if (audioContext.state === 'suspended') {
+        await audioContext.resume();
+      }
+      
+      // Play a silent sound immediately to unlock audio on mobile
+      // This is required for mobile browsers to allow future audio playback
+      if (!audioUnlockedRef.current) {
+        const silentOscillator = audioContext.createOscillator();
+        const silentGain = audioContext.createGain();
+        
+        silentOscillator.connect(silentGain);
+        silentGain.connect(audioContext.destination);
+        
+        // Set gain to 0 (silent) but still play to unlock audio
+        silentGain.gain.setValueAtTime(0, audioContext.currentTime);
+        silentOscillator.frequency.setValueAtTime(1, audioContext.currentTime); // Very low frequency
+        silentOscillator.type = 'sine';
+        
+        silentOscillator.start(audioContext.currentTime);
+        silentOscillator.stop(audioContext.currentTime + 0.01); // Very short duration
+        
+        audioUnlockedRef.current = true;
+      }
+    } catch (error) {
+      console.debug("Could not unlock audio:", error);
     }
   }
 
-  function playNotificationSound() {
+  async function playNotificationSound() {
     if (!soundEnabled || !audioContextRef.current) return;
     
     try {
       const audioContext = audioContextRef.current;
       
-      // Resume audio context if suspended (mobile browsers)
+      // Ensure audio context is running (mobile browsers)
       if (audioContext.state === 'suspended') {
-        audioContext.resume();
+        await audioContext.resume();
+      }
+      
+      // Wait a tiny bit to ensure context is ready
+      if (audioContext.state !== 'running') {
+        return; // Can't play if context isn't running
       }
       
       const oscillator = audioContext.createOscillator();
@@ -267,36 +300,49 @@ function PlayPageContent() {
     }
   }
 
-  function toggleSound() {
+  async function toggleSound() {
     const newValue = !soundEnabled;
     setSoundEnabled(newValue);
     localStorage.setItem('trivia_sound_enabled', String(newValue));
     
     // Unlock audio when user enables sound
     if (newValue) {
-      unlockAudio();
-      // Play a quick test sound
-      setTimeout(() => playNotificationSound(), 100);
+      await unlockAudio();
+      // Play a quick test sound after unlocking
+      setTimeout(() => playNotificationSound(), 50);
     }
   }
 
-  // Unlock audio on mount if sound is enabled
+  // Unlock audio on any user interaction (for mobile browser compatibility)
   useEffect(() => {
-    if (soundEnabled && typeof window !== 'undefined') {
-      // Try to unlock audio on any user interaction
-      const handleInteraction = () => {
-        unlockAudio();
+    if (typeof window === 'undefined') return;
+    
+    // Try to unlock audio on first user interaction
+    // This helps mobile browsers allow audio playback
+    const handleInteraction = async () => {
+      if (!audioUnlockedRef.current) {
+        await unlockAudio();
+        // Remove listeners after first unlock
         window.removeEventListener('click', handleInteraction);
         window.removeEventListener('touchstart', handleInteraction);
-      };
-      window.addEventListener('click', handleInteraction);
-      window.addEventListener('touchstart', handleInteraction);
-      return () => {
-        window.removeEventListener('click', handleInteraction);
-        window.removeEventListener('touchstart', handleInteraction);
-      };
-    }
-  }, [soundEnabled]);
+        window.removeEventListener('touchend', handleInteraction);
+        window.removeEventListener('keydown', handleInteraction);
+      }
+    };
+    
+    // Add listeners for various interaction types
+    window.addEventListener('click', handleInteraction, { once: true });
+    window.addEventListener('touchstart', handleInteraction, { once: true });
+    window.addEventListener('touchend', handleInteraction, { once: true });
+    window.addEventListener('keydown', handleInteraction, { once: true });
+    
+    return () => {
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+      window.removeEventListener('touchend', handleInteraction);
+      window.removeEventListener('keydown', handleInteraction);
+    };
+  }, []);
 
   // Load game when playerId is set
   useEffect(() => {
@@ -1129,9 +1175,9 @@ function PlayPageContent() {
             </div>
             {/* Sound Toggle Button */}
             <button
-              onClick={() => {
-                unlockAudio();
-                toggleSound();
+              onClick={async () => {
+                await unlockAudio();
+                await toggleSound();
               }}
               className="p-1.5 rounded-full hover:bg-black/10 transition-colors"
               title={soundEnabled ? "Sound enabled - Click to disable" : "Sound disabled - Click to enable"}
