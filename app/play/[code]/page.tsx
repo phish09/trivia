@@ -1110,7 +1110,7 @@ function PlayPageContent() {
               {sortedPlayers.map((player: any, index: number) => (
                 <div 
                   key={player.id} 
-                  className={`flex items-center justify-between p-6 rounded-xl border-2 transition-all ${
+                  className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
                     index === 0 
                       ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-md' 
                       : index === 1 
@@ -1120,8 +1120,8 @@ function PlayPageContent() {
                           : 'bg-slate-50 border-slate-200'
                   } ${player.id === playerId ? 'ring-2 ring-blue-400' : ''}`}
                 >
-                  <div className="flex items-center gap-6">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                  <div className="flex items-center gap-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
                       index === 0 
                         ? 'bg-yellow-400 text-yellow-900' 
                         : index === 1 
@@ -1133,7 +1133,7 @@ function PlayPageContent() {
                       {index + 1}
                     </div>
                     <div>
-                      <span className={`font-bold text-lg ${
+                      <span className={`font-bold text-sm ${
                         player.id === playerId ? 'text-blue-700' : 'text-slate-800'
                       }`}>
                         {player.username} {index === 0 && '👑'}
@@ -1141,7 +1141,7 @@ function PlayPageContent() {
                       </span>
                     </div>
                   </div>
-                  <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  <span className="text-sm font-bold bg-gradient-to-r from-secondary to-tertiary bg-clip-text text-transparent">
                     {player.score || 0} pts
                   </span>
                 </div>
