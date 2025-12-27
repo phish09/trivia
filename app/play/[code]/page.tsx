@@ -7,6 +7,7 @@ import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
 import { getOrCreatePersistentPlayerId, getPlayerIdForGame, clearPlayerMapping } from "@/lib/cookies";
 import { getSupabaseClientForRealtime } from "@/lib/db";
 import Modal from "@/components/Modal";
+import RandomQuestionDisplay from "@/components/RandomQuestionDisplay";
 
 function PlayPageContent() {
   const params = useParams();
@@ -1445,6 +1446,9 @@ function PlayPageContent() {
               </button>
             </div>
           </div>
+
+          {/* Random Question Display */}
+          <RandomQuestionDisplay />
 
           {/* Leave Game Confirmation Modal */}
           <Modal

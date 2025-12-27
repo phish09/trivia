@@ -1238,13 +1238,48 @@ export async function importQuestions(gameId: string, csvContent: string) {
         const answerText = (rowData.correct_answer || "").trim();
         answer = answerText.toLowerCase() === "true" ? 0 : 1;
       } else {
-        // Multiple choice - answer should be index (0-based)
-        const answerIndex = parseInt(rowData.correct_answer);
+        // Multiple choice - answer can be index (0-based) or answer text
+        const correctAnswerText = (rowData.correct_answer || "").trim();
+        
+        // First try to parse as an integer index (for backward compatibility)
+        let answerIndex = parseInt(correctAnswerText);
+        
+        // If not a valid integer, try to find matching choice text
         if (isNaN(answerIndex) || answerIndex < 0 || answerIndex >= choices.length) {
-          errors.push(`Row ${i + 2}: Invalid answer index (must be 0-${choices.length - 1})`);
-          continue;
+          // Search for matching choice text (case-insensitive, trimmed)
+          answerIndex = choices.findIndex(choice => 
+            choice && choice.trim().toLowerCase() === correctAnswerText.toLowerCase()
+          );
+          
+          if (answerIndex === -1) {
+            errors.push(`Row ${i + 2}: Invalid answer. "${correctAnswerText}" does not match any choice. Available choices: ${choices.map((c, idx) => `${idx}: "${c}"`).join(", ")}`);
+            continue;
+          }
         }
+        
         answer = answerIndex;
+      }
+      
+      // Parse boolean fields (handle both "TRUE"/"FALSE" and "true"/"false")
+      const hasTimer = rowData.has_timer && rowData.has_timer.trim().toLowerCase() === "true";
+      const hasWager = rowData.has_wager && rowData.has_wager.trim().toLowerCase() === "true";
+      
+      // Parse timer seconds (only if hasTimer is true and value is valid)
+      let timerSeconds: number | undefined = undefined;
+      if (hasTimer && rowData.timer_seconds) {
+        const parsed = parseInt(rowData.timer_seconds.trim());
+        if (!isNaN(parsed) && parsed > 0) {
+          timerSeconds = parsed;
+        }
+      }
+      
+      // Parse max wager (only if hasWager is true and value is valid)
+      let maxWager: number | undefined = undefined;
+      if (hasWager && rowData.max_wager) {
+        const parsed = parseInt(rowData.max_wager.trim());
+        if (!isNaN(parsed) && parsed > 0) {
+          maxWager = parsed;
+        }
       }
       
       // Create question - addQuestion automatically handles ordering by appending to the end
@@ -1256,11 +1291,11 @@ export async function importQuestions(gameId: string, csvContent: string) {
         multiplier: parseInt(rowData.multiplier) || 1,
         isFillInBlank,
         isTrueFalse,
-        hasTimer: rowData.has_timer === "true",
-        timerSeconds: rowData.timer_seconds ? parseInt(rowData.timer_seconds) : undefined,
+        hasTimer,
+        timerSeconds,
         fillInBlankAnswer,
-        hasWager: rowData.has_wager === "true",
-        maxWager: rowData.has_wager === "true" && rowData.max_wager ? parseInt(rowData.max_wager) : undefined,
+        hasWager,
+        maxWager,
       });
       
       results.push(question);
