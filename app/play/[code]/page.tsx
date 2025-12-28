@@ -1448,7 +1448,11 @@ function PlayPageContent() {
           </div>
 
           {/* Random Question Display */}
-          <RandomQuestionDisplay />
+          <div className="mt-8">
+            <div className="text-4xl font-bold text-white text-center">🧊</div>
+            <h2 className="text-2xl font-bold text-white mb-4 text-center">Ice breaker questions</h2>
+            <RandomQuestionDisplay />
+          </div>
 
           {/* Leave Game Confirmation Modal */}
           <Modal
