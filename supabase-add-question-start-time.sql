@@ -5,3 +5,4 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS question_start_time TIMESTAMPTZ;
 
 
 
+

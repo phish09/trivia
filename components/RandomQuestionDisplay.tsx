@@ -13,6 +13,9 @@ export default function RandomQuestionDisplay() {
   const [countdown, setCountdown] = useState<number>(5);
   const randomQuestionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const questionStartTimeRef = useRef<number | null>(null);
+  const revealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSubmittedRef = useRef<boolean>(false);
 
   // Decode HTML entities
   const decodeHtmlEntities = (text: string): string => {
@@ -37,6 +40,46 @@ export default function RandomQuestionDisplay() {
     return RANDOM_QUESTIONS[randomQuestionIndex % RANDOM_QUESTIONS.length];
   }, [randomQuestionIndex]);
 
+  // Track when question starts and set up auto-reveal and move-to-next timers
+  useEffect(() => {
+    // Reset state for new question
+    setRandomQuestionSelected(null);
+    setRandomQuestionRevealed(false);
+    setCountdown(5);
+    questionStartTimeRef.current = Date.now();
+    hasSubmittedRef.current = false;
+
+    // Clear any existing timeouts
+    if (randomQuestionTimeoutRef.current) {
+      clearTimeout(randomQuestionTimeoutRef.current);
+    }
+    if (revealTimeoutRef.current) {
+      clearTimeout(revealTimeoutRef.current);
+    }
+
+    // Auto-reveal answers after 5 seconds if no one has submitted
+    revealTimeoutRef.current = setTimeout(() => {
+      if (!hasSubmittedRef.current) {
+        setRandomQuestionRevealed(true);
+        setCountdown(5); // Start countdown from 5, will show grace period at 0
+      }
+    }, 5000);
+
+    // Move to next question after 7 seconds (5 countdown + 2 grace period)
+    randomQuestionTimeoutRef.current = setTimeout(() => {
+      setRandomQuestionIndex((prev) => prev + 1);
+    }, 7000);
+
+    return () => {
+      if (randomQuestionTimeoutRef.current) {
+        clearTimeout(randomQuestionTimeoutRef.current);
+      }
+      if (revealTimeoutRef.current) {
+        clearTimeout(revealTimeoutRef.current);
+      }
+    };
+  }, [randomQuestionIndex]);
+
   // Memoize shuffled answers for current random question
   const shuffledAnswers = useMemo(() => {
     if (!currentRandomQuestion) return [];
@@ -53,45 +96,62 @@ export default function RandomQuestionDisplay() {
 
   // Handle random question answer selection
   const handleRandomQuestionAnswer = (answerIndex: number) => {
-    if (randomQuestionSelected !== null || randomQuestionRevealed) return;
+    // Prevent submissions after answers are revealed
+    if (randomQuestionRevealed) return;
+    
+    // Check if we're still within the submission window (7 seconds total including grace period)
+    const now = Date.now();
+    const elapsed = questionStartTimeRef.current ? (now - questionStartTimeRef.current) / 1000 : 0;
+    if (elapsed > 7) {
+      // Past the grace period, don't allow submission
+      return;
+    }
     
     setRandomQuestionSelected(answerIndex);
     setRandomQuestionRevealed(true);
+    hasSubmittedRef.current = true;
+    
+    // Always start countdown from 5 when answers are revealed
     setCountdown(5);
-
-    // Clear any existing timeout
-    if (randomQuestionTimeoutRef.current) {
-      clearTimeout(randomQuestionTimeoutRef.current);
+    
+    // Clear the auto-reveal timeout since someone submitted
+    if (revealTimeoutRef.current) {
+      clearTimeout(revealTimeoutRef.current);
+      revealTimeoutRef.current = null;
     }
-
-    // Move to next question after 5 seconds
-    randomQuestionTimeoutRef.current = setTimeout(() => {
-      setRandomQuestionIndex((prev) => prev + 1);
-      setRandomQuestionSelected(null);
-      setRandomQuestionRevealed(false);
-      setCountdown(5);
-    }, 5000);
   };
 
   // Countdown effect
   useEffect(() => {
-    if (randomQuestionRevealed && countdown > 0) {
-      countdownIntervalRef.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            if (countdownIntervalRef.current) {
-              clearInterval(countdownIntervalRef.current);
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    // Clear any existing interval first to prevent multiple intervals
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
     }
+
+    // Only start countdown if revealed and countdown is positive
+    if (!randomQuestionRevealed) {
+      return;
+    }
+
+    countdownIntervalRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          // Clear interval when countdown reaches 0
+          if (countdownIntervalRef.current) {
+            clearInterval(countdownIntervalRef.current);
+            countdownIntervalRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     return () => {
       if (countdownIntervalRef.current) {
         clearInterval(countdownIntervalRef.current);
+        countdownIntervalRef.current = null;
       }
     };
   }, [randomQuestionRevealed]);

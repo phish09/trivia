@@ -63,3 +63,4 @@ export const RANDOM_QUESTIONS: RandomQuestion[] = [
   {"type": "multiple", "difficulty": "easy", "category": "Entertainment: Video Games", "question": "In Super Mario Bros., who informs Mario that the princess is in another castle?", "correct_answer": "Toad", "incorrect_answers": ["Luigi", "Yoshi", "Bowser"]}
 ];
 
+

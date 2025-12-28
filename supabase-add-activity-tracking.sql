@@ -6,3 +6,4 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS last_activity TIMESTAMP WITH TIME ZON
 UPDATE games SET last_activity = created_at WHERE last_activity IS NULL;
 
 
+
