@@ -72,10 +72,36 @@ function HostGameContent() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{success: boolean, message: string} | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [showQuestionDropdown, setShowQuestionDropdown] = useState(false);
+  const questionDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     checkPassword();
   }, [code]);
+
+  // Close dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (questionDropdownRef.current && !questionDropdownRef.current.contains(event.target as Node)) {
+        setShowQuestionDropdown(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showQuestionDropdown) {
+        setShowQuestionDropdown(false);
+      }
+    };
+
+    if (showQuestionDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [showQuestionDropdown]);
 
   async function checkPassword() {
     // Check if password is stored in sessionStorage
@@ -1458,7 +1484,7 @@ function HostGameContent() {
                       })}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-3 items-center w-full">
+                  <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
                     <button
                       className="border border-b-4 border-emerald-900 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
                       onClick={handleNextQuestion}
@@ -1468,66 +1494,110 @@ function HostGameContent() {
                       </svg>
                       Next Question
                     </button>
-                    <span className="text-slate-500 font-medium">or</span>
-                    <select
-                      className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all max-w-full min-w-0 flex-1"
-                      style={{ maxWidth: '100%' }}
-                      onChange={(e) => {
-                        const selectedIndex = Number(e.target.value);
-                        if (selectedIndex >= 0 && selectedIndex < game.questions.length) {
-                          handleActivateQuestion(selectedIndex);
-                        }
-                      }}
-                      value=""
-                    >
-                      <option value="">Jump to Question...</option>
-                      {game.questions.map((q: any, idx: number) => (
-                        <option key={q.id} value={idx}>
-                          Question {idx + 1}: {q.text.substring(0, 50)}{q.text.length > 50 ? "..." : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <span className="text-slate-500 font-medium whitespace-nowrap">or</span>
+                    <div className="relative flex-1 min-w-0 max-w-md w-full sm:w-auto" ref={questionDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuestionDropdown(!showQuestionDropdown)}
+                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all flex items-center justify-between gap-2 text-left"
+                      >
+                        <span className="truncate">Jump to Question...</span>
+                        <svg 
+                          className={`w-5 h-5 text-slate-500 flex-shrink-0 transition-transform ${showQuestionDropdown ? 'rotate-180' : ''}`}
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showQuestionDropdown && (
+                        <div className="absolute z-50 mt-2 w-full bg-white rounded-xl shadow-2xl border-2 border-slate-200 max-h-96 overflow-y-auto">
+                          <div className="p-2 space-y-1">
+                            {game.questions.map((q: any, idx: number) => (
+                              <button
+                                key={q.id}
+                                type="button"
+                                onClick={() => {
+                                  handleActivateQuestion(idx);
+                                  setShowQuestionDropdown(false);
+                                }}
+                                className="w-full text-left px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-primary/10 hover:to-secondary/10 hover:border-primary/30 border-2 border-transparent transition-all group"
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="font-bold text-primary flex-shrink-0 mt-0.5">Q{idx + 1}</span>
+                                  <span className="text-slate-700 group-hover:text-slate-900 break-words">{q.text}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-          ) : (
-            <div className="space-y-4 mt-4">
-              <p className="text-slate-600 font-medium">No question active. Start the game or select a question:</p>
-              <div className="flex flex-wrap gap-3 items-center w-full">
-                <button
-                  className="border border-emerald-900 border-b-4 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
-                  onClick={() => handleActivateQuestion(0)}
-                  title="Start game from the first question"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Start game
-                </button>
-                <span className="text-slate-500 font-medium">or</span>
-                <select
-                  className="px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all max-w-full min-w-0 flex-1"
-                  style={{ maxWidth: '100%' }}
-                  onChange={(e) => {
-                    const selectedIndex = Number(e.target.value);
-                    if (selectedIndex >= 0 && selectedIndex < game.questions.length) {
-                      handleActivateQuestion(selectedIndex);
-                    }
-                  }}
-                  value=""
-                >
-                  <option value="">Jump to Question...</option>
-                  {game.questions.map((q: any, idx: number) => (
-                    <option key={q.id} value={idx}>
-                      Question {idx + 1}: {q.text.substring(0, 50)}{q.text.length > 50 ? "..." : ""}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-4 mt-4">
+                <p className="text-slate-800"><strong>No question active.</strong> Start the game or select a question.</p>
+                <div className="flex flex-col md:flex-row gap-3 items-start md:items-center w-full">
+                  <div className="flex items-center gap-2">
+                  <button
+                    className="border border-emerald-900 border-b-4 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
+                    onClick={() => handleActivateQuestion(0)}
+                    title="Start game from the first question"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Start game
+                  </button>
+                  <span className="text-slate-500 font-medium whitespace-nowrap">or</span>
+                  </div>
+                  <div className="relative flex-1 min-w-0 max-w-md w-full sm:w-auto" ref={questionDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuestionDropdown(!showQuestionDropdown)}
+                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all flex items-center justify-between gap-2 text-left"
+                      >
+                        <span className="truncate">Jump to Question...</span>
+                        <svg 
+                          className={`w-5 h-5 text-slate-500 flex-shrink-0 transition-transform ${showQuestionDropdown ? 'rotate-180' : ''}`}
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+                      {showQuestionDropdown && (
+                        <div className="absolute z-50 mt-2 w-full bg-white rounded-xl shadow-2xl border-2 border-slate-200 max-h-96 overflow-y-auto">
+                          <div className="p-2 space-y-1">
+                            {game.questions.map((q: any, idx: number) => (
+                              <button
+                                key={q.id}
+                                type="button"
+                                onClick={() => {
+                                  handleActivateQuestion(idx);
+                                  setShowQuestionDropdown(false);
+                                }}
+                                className="w-full text-left px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-primary/10 hover:to-secondary/10 hover:border-primary/30 border-2 border-transparent transition-all group"
+                              >
+                                <div className="flex items-start gap-2">
+                                  <span className="font-bold text-primary flex-shrink-0 mt-0.5">Q{idx + 1}</span>
+                                  <span className="text-slate-700 group-hover:text-slate-900 break-words">{q.text}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
