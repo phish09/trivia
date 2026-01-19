@@ -7,3 +7,5 @@ ALTER TABLE games ADD COLUMN IF NOT EXISTS game_ended BOOLEAN DEFAULT false;
 
 
 
+
+

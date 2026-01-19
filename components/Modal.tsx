@@ -96,7 +96,7 @@ export default function Modal({
                     onClose();
                   }
                 }}
-                className="px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold shadow-sm hover:shadow hover:bg-slate-300 transition-all"
+                className="border border-b-4 border-slate-900 px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold shadow-sm hover:shadow hover:bg-slate-300 transition-all"
               >
                 {cancelText}
               </button>
@@ -107,7 +107,7 @@ export default function Modal({
                   }
                   onClose();
                 }}
-                className="px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
+                className="border border-b-4 border-red-900 px-6 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
               >
                 {confirmText}
               </button>
@@ -115,7 +115,7 @@ export default function Modal({
           ) : (
             <button
               onClick={handleButtonClick}
-              className="px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
+              className="border border-b-4 border-blue-900 px-6 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
             >
               {buttonText}
             </button>

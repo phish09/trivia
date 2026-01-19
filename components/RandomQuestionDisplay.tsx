@@ -171,24 +171,41 @@ export default function RandomQuestionDisplay() {
             
             // Determine styling based on selection and correctness - match game UI
             let buttonClass = "p-6 border-2 rounded-xl transition-all ";
+            let iconCircleClass = "w-16 h-16 rounded-full flex items-center justify-center ";
+            let iconColor = "text-slate-500";
             
             if (showAnswer) {
               if (isCorrect) {
                 // Correct answer - faded green
                 buttonClass += "bg-green-100 border-green-400";
+                iconCircleClass += "bg-green-200";
+                iconColor = "text-green-600";
               } else if (isSelected) {
                 // Selected but wrong - faded red
                 buttonClass += "bg-red-100 border-red-400";
+                iconCircleClass += "bg-red-200";
+                iconColor = "text-red-600";
               } else {
                 // Not selected and wrong - faded gray
                 buttonClass += "bg-slate-50 border-slate-200";
+                iconCircleClass += "bg-slate-200";
+                iconColor = "text-slate-500";
               }
             } else {
               // Not revealed yet - normal hover states
+              iconCircleClass += "bg-slate-200";
               if (isTrue) {
                 buttonClass += "bg-white border-slate-200 hover:border-green-300 hover:bg-green-50 hover:shadow-md";
+                if (isSelected) {
+                  iconCircleClass = "w-16 h-16 rounded-full flex items-center justify-center bg-white";
+                  iconColor = "text-green-600";
+                }
               } else {
                 buttonClass += "bg-white border-slate-200 hover:border-red-300 hover:bg-red-50 hover:shadow-md";
+                if (isSelected) {
+                  iconCircleClass = "w-16 h-16 rounded-full flex items-center justify-center bg-white";
+                  iconColor = "text-red-600";
+                }
               }
             }
             
@@ -199,35 +216,44 @@ export default function RandomQuestionDisplay() {
                 onClick={() => handleRandomQuestionAnswer(index)}
                 disabled={randomQuestionRevealed}
               >
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col items-center gap-3 flex-1">
-                    <div className="w-16 h-16 rounded-full flex items-center justify-center bg-slate-200">
-                      {isTrue ? (
-                        <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="flex flex-col items-center gap-3">
+                  <div className={iconCircleClass}>
+                    {showAnswer ? (
+                      // When revealed, show check for correct, X for wrong selected
+                      isCorrect ? (
+                        <svg className={`w-8 h-8 ${iconColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      ) : isSelected ? (
+                        <svg className={`w-8 h-8 ${iconColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      ) : (
+                        // Not selected and wrong - show default icon based on True/False
+                        isTrue ? (
+                          <svg className={`w-8 h-8 ${iconColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className={`w-8 h-8 ${iconColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        )
+                      )
+                    ) : (
+                      // Not revealed yet - show icon based on True/False
+                      isTrue ? (
+                        <svg className={`w-8 h-8 ${iconColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                         </svg>
                       ) : (
-                        <svg className="w-8 h-8 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className={`w-8 h-8 ${iconColor}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                         </svg>
-                      )}
-                    </div>
-                    <span className="font-bold text-xl">{answer}</span>
+                      )
+                    )}
                   </div>
-                  {showAnswer && isCorrect && (
-                    <span className="px-3 py-1 bg-green-500 text-white rounded-full text-sm font-bold flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                  )}
-                  {showAnswer && isSelected && !isCorrect && (
-                    <span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </span>
-                  )}
+                  <span className="font-bold text-xl">{answer}</span>
                 </div>
               </button>
             );
@@ -241,12 +267,14 @@ export default function RandomQuestionDisplay() {
             const showAnswer = randomQuestionRevealed;
             
             // Determine styling based on selection and correctness - match game UI
-            let buttonClass = "w-full text-sm md:text-lg text-left border-2 rounded-xl transition-all ";
+            let buttonClass = "w-full text-sm md:text-lg text-left border-2 rounded-full transition-all ";
             let buttonStyle: React.CSSProperties = {};
             
+            // Keep padding consistent to prevent button growth
+            buttonClass += "py-3 px-4 md:py-5 md:px-8 ";
+            
             if (showAnswer) {
-              // When revealed, use p-6 padding like game UI
-              buttonClass += "p-6 ";
+              // When revealed, change colors but keep same padding
               if (isCorrect) {
                 // Correct answer - faded green
                 buttonClass += "bg-green-100 border-green-400";
@@ -258,10 +286,9 @@ export default function RandomQuestionDisplay() {
                 buttonClass += "bg-slate-50 border-slate-200";
               }
             } else {
-              // Not revealed yet - normal hover states with original padding
-              buttonClass += "py-3 px-4 md:py-5 md:px-8 ";
+              // Not revealed yet - normal hover states
               if (isSelected) {
-                buttonClass += "text-white border-secondary shadow-lg scale-[1.02]";
+                buttonClass += "text-white border-secondary shadow-lg";
                 buttonStyle = {
                   background: `linear-gradient(to right, var(--tertiary), var(--fourth-hover))`,
                 };
@@ -278,22 +305,24 @@ export default function RandomQuestionDisplay() {
                 onClick={() => handleRandomQuestionAnswer(index)}
                 disabled={randomQuestionRevealed}
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{decodeHtmlEntities(answer)}</span>
-                  {showAnswer && isCorrect && (
-                    <span className="px-3 py-1 bg-green-500 text-white rounded-full text-sm font-bold flex items-center gap-1">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                    </span>
-                  )}
-                  {showAnswer && isSelected && !isCorrect && (
-                    <span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">
-                      <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </span>
-                  )}
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-medium flex-1">{decodeHtmlEntities(answer)}</span>
+                  <span className="w-[60px] flex-shrink-0 flex justify-end items-center">
+                    {showAnswer && isCorrect && (
+                      <span className="px-3 py-1 bg-green-500 text-white rounded-full text-sm font-bold flex items-center gap-1">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </span>
+                    )}
+                    {showAnswer && isSelected && !isCorrect && (
+                      <span className="px-3 py-1 bg-red-500 text-white rounded-full text-sm font-bold">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </span>
+                    )}
+                  </span>
                 </div>
               </button>
             );

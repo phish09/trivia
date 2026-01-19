@@ -210,7 +210,7 @@ function JoinForm() {
                 Game code
               </label>
               <input
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all text-center text-2xl font-bold tracking-widest"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all text-center text-2xl font-bold tracking-widest"
                 placeholder="123456"
                 value={code}
                 inputMode="numeric"
@@ -232,7 +232,7 @@ function JoinForm() {
                 Your name
               </label>
               <input
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 outline-none transition-all"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
                 placeholder="Enter your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -241,7 +241,7 @@ function JoinForm() {
             </div>
 
             <button
-              className="w-full px-6 py-3 bg-fourth text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
+              className="border border-b-4 border-amber-700 w-full px-6 py-3 bg-fourth text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-lg"
               onClick={handleJoin}
               disabled={!code || !name.trim() || joining}
             >

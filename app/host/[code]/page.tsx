@@ -928,7 +928,7 @@ function HostGameContent() {
             </div>
             
             <button
-              className="w-full px-6 py-3 bg-gradient-to-br from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2"
+              className="border border-b-4 border-red-800 w-full px-6 py-3 bg-gradient-to-br from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 flex items-center justify-center gap-2"
               onClick={handlePasswordSubmit}
             >
               Verify password
@@ -974,7 +974,7 @@ function HostGameContent() {
         {/* Game Ended Banner */}
         {game.gameEnded && (
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-2xl shadow-xl p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex md:flex-row flex-col items-start md:items-center gap-4">
               <div className="p-3 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-xl">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
@@ -988,7 +988,7 @@ function HostGameContent() {
                 <button
                   onClick={handleExport}
                   disabled={exporting}
-                  className="px-6 py-3 bg-white text-primary rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                  className="border border-primary border-b-4 px-6 py-3 bg-white text-primary rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
                   title="Export questions to CSV/Excel file"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1034,7 +1034,7 @@ function HostGameContent() {
         </div>
           <div className="flex gap-2 items-center mt-4 md:mt-0">
               <button
-                className="px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm hover:shadow"
+                className="border border-b-4 border-slate-900 px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm hover:shadow"
                 onClick={loadGame}
                 title="Refresh game data"
               >
@@ -1045,13 +1045,13 @@ function HostGameContent() {
                 </span>
               </button>
               <button
-                className="px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:from-amber-600 hover:to-orange-600 font-medium transition-all shadow-lg hover:shadow-xl"
+                className="border border-amber-800 border-b-4 px-4 py-2 text-sm bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl hover:from-amber-600 hover:to-orange-600 font-medium transition-all shadow-lg hover:shadow-xl"
                 onClick={handleResetGameClick}
               >
                 Reset game
               </button>
               <button
-                className="px-4 py-2 text-sm bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+                className="border border-red-900 border-b-4 px-4 py-2 text-sm bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={handleEndGameClick}
                 disabled={ending}
               >
@@ -1376,7 +1376,7 @@ function HostGameContent() {
 
               {!game.answersRevealed ? (
                 <button
-                  className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
+                  className="border border-b-4 border-amber-800 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
                   onClick={handleRevealAnswers}
                   disabled={isRevealing}
                 >
@@ -1460,7 +1460,7 @@ function HostGameContent() {
                   </div>
                   <div className="flex flex-wrap gap-3 items-center w-full">
                     <button
-                      className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
+                      className="border border-b-4 border-emerald-900 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
                       onClick={handleNextQuestion}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1496,7 +1496,7 @@ function HostGameContent() {
               <p className="text-slate-600 font-medium">No question active. Start the game or select a question:</p>
               <div className="flex flex-wrap gap-3 items-center w-full">
                 <button
-                  className="px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
+                  className="border border-emerald-900 border-b-4 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
                   onClick={() => handleActivateQuestion(0)}
                   title="Start game from the first question"
                 >
@@ -1548,8 +1548,8 @@ function HostGameContent() {
             {sortedPlayers.map((player: any, index: number) => (
               <div 
                 key={player.id} 
-                className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
-                  index === 0 ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-md' :
+                className={`flex items-center justify-between p-4 rounded-xl border-2 border-b-6 transition-all ${
+                  index === 0 ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300' :
                   index === 1 ? 'bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300' :
                   index === 2 ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-300' :
                   'bg-slate-50 border-slate-200'
@@ -1607,7 +1607,7 @@ function HostGameContent() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
             {sortedPlayers.map((player: any) => (
-              <div key={player.id} className="flex justify-between items-center p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-200 hover:shadow-md transition-all group">
+              <div key={player.id} className="flex justify-between border border-b-4 border-slate-300 items-center p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl hover:border-slate-800 transition-all group">
                 <span className="font-semibold text-slate-800">{player.username}</span>
                 <div className="flex items-center gap-2">
                   <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-bold text-sm">
@@ -1634,7 +1634,7 @@ function HostGameContent() {
       <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-secondary to-tertiary rounded-lg">
+            <div className="p-2 bg-gradient-to-br from-tertiary to-fourth rounded-lg">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
@@ -1699,7 +1699,7 @@ function HostGameContent() {
           <div>
             <label className="block text-sm font-semibold text-slate-700 mb-2">Question text</label>
             <input
-              className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+              className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
               placeholder={isFillInBlank ? "Enter your fill in the blank question" : "Enter your question"}
               value={questionText}
               onChange={(e) => setQuestionText(e.target.value)}
@@ -1709,7 +1709,7 @@ function HostGameContent() {
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Correct answer</label>
               <input
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
                 placeholder="Enter the correct answer"
                 value={fillInBlankAnswer}
                 onChange={(e) => setFillInBlankAnswer(e.target.value)}
@@ -1729,7 +1729,7 @@ function HostGameContent() {
                       className="w-5 h-5 focus:ring-2 focus:ring-primary"
                     />
                     <input
-                      className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                      className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
                       placeholder={`Choice ${idx + 1}`}
                       value={choice}
                       onChange={(e) => {
@@ -1773,7 +1773,7 @@ function HostGameContent() {
               <label className="block text-sm font-semibold text-slate-700 mb-2">Points</label>
               <input
                 type="number"
-                className="w-24 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                className="w-24 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
                 value={points}
                 onChange={(e) => setPoints(Number(e.target.value))}
                 min="1"
@@ -1782,7 +1782,7 @@ function HostGameContent() {
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">Multiplier</label>
               <select
-                className="px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all bg-white"
+                className="px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all bg-white"
                 value={multiplier}
                 onChange={(e) => setMultiplier(Number(e.target.value))}
               >
@@ -1813,7 +1813,7 @@ function HostGameContent() {
                   min="1"
                   max="999"
                   maxLength={3}
-                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
                   placeholder="e.g., 15 for 15 seconds, 120 for 2 minutes"
                   value={timerSeconds === '' ? '' : timerSeconds}
                   onChange={(e) => {
@@ -1857,7 +1857,7 @@ function HostGameContent() {
                 <input
                   type="number"
                   min="1"
-                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
                   placeholder="Maximum points players can wager"
                   value={maxWager}
                   onChange={(e) => setMaxWager(Number(e.target.value) || 10)}
@@ -1870,7 +1870,7 @@ function HostGameContent() {
           </div>
           <div className="flex justify-end mt-4">
             <button
-              className="px-6 py-3 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
+              className="border border-b-4 border-secondary px-6 py-3 bg-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
               onClick={handleAddQuestion}
               disabled={!questionText || (!isFillInBlank && !isTrueFalse && choices.some((c) => !c))}
             >
@@ -1899,7 +1899,7 @@ function HostGameContent() {
               <button
                 onClick={handleExport}
                 disabled={exporting}
-                className="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="border border-b-4 border-blue-900 px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 font-medium transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 title="Export questions to CSV/Excel file"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1910,7 +1910,7 @@ function HostGameContent() {
             )}
             <button
               onClick={() => setShowImportModal(true)}
-              className="px-4 py-2 text-sm bg-gradient-to-r from-green-500 to-green-600 text-white rounded-xl hover:from-green-600 hover:to-green-700 font-medium transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
+              className="border border-b-4 border-green-900 px-4 py-2 text-sm bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 font-medium transition-all shadow-lg hover:shadow-xl flex items-center gap-2"
               title="Import questions from CSV/Excel file"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1954,13 +1954,13 @@ function HostGameContent() {
                 className={`bg-white border-2 rounded-xl p-4 cursor-move transition-all ${
                   game.currentQuestionIndex === idx 
                     ? "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-400 shadow-lg" 
-                    : "border-slate-200 hover:border-slate-300"
+                    : "border-b-6 border-slate-300 hover:border-slate-800"
                 } ${
                   draggedQuestionId === q.id ? "opacity-50 scale-95" : ""
                 } ${
                   dragOverIndex === idx ? "border-blue-500 border-2 bg-blue-50 scale-105" : ""
                 } ${
-                  editingQuestionId === q.id ? "cursor-default" : "hover:shadow-lg"
+                  editingQuestionId === q.id ? "cursor-dyefault" : "hover:shadow-lg"
                 }`}
               >
                 {editingQuestionId === q.id ? (
@@ -2187,13 +2187,13 @@ function HostGameContent() {
                     </div>
                     <div className="flex gap-3 pt-2">
                       <button
-                        className="px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
+                        className="border border-b-4 border-emerald-900 px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
                         onClick={handleSaveEdit}
                       >
                         Save
                       </button>
                       <button
-                        className="px-6 py-3 bg-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-300 transition-all flex items-center gap-2"
+                        className="border border-b-4 border-slate-700 px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-300 transition-all flex items-center gap-2"
                         onClick={handleCancelEdit}
                       >
                         Cancel

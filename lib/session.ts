@@ -82,4 +82,3 @@ export function getAllSessions(): GameSession[] {
   }
   return [];
 }
-

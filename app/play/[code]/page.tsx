@@ -1328,7 +1328,7 @@ function PlayPageContent() {
           {/* Leave Game Button */}
           <div className="text-center">
             <button
-              className="px-6 py-3 bg-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
+              className="border border-b-4 border-red-900 px-6 py-3 bg-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all"
               onClick={handleLeaveGameClick}
               disabled={leaving}
             >
@@ -1426,7 +1426,7 @@ function PlayPageContent() {
             <p className="text-lg text-slate-600 mb-6">Waiting for {game?.hostName || 'host'} to start the game...</p>
             <div className="flex justify-center gap-3">
               <button
-                className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
+                className="border border-b-4 border-slate-800 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
                 onClick={loadGame}
                 title="Refresh game data"
               >
@@ -1438,7 +1438,7 @@ function PlayPageContent() {
                 </span>
               </button>
               <button
-                className="px-4 py-2 bg-tertiary text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl"
+                className="border border-b-4 border-red-900 px-4 py-2 bg-tertiary text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl"
                 onClick={handleLeaveGameClick}
                 disabled={leaving}
               >
@@ -1512,7 +1512,7 @@ function PlayPageContent() {
               🔄 Refresh
             </button>
             <button
-              className="px-4 py-2 bg-tertiary text-white rounded hover:bg-red-700 disabled:bg-gray-400"
+              className="border border-b-4 border-red-900 px-4 py-2 bg-tertiary text-white rounded hover:bg-red-700 disabled:bg-gray-400"
               onClick={handleLeaveGameClick}
               disabled={leaving}
             >
@@ -1765,7 +1765,7 @@ function PlayPageContent() {
             <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
               <p className="text-sm font-semibold text-slate-600 mb-1">Game code</p>
               <div className="flex items-center gap-3">
-                <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-wider">
+                <p className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-wider">
                   {code}
                 </p>
                 <div className="relative">
@@ -1825,7 +1825,7 @@ function PlayPageContent() {
               </span>
             </button>
             <button
-              className="px-4 py-2 bg-tertiary text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl"
+              className="border border-b-4 border-red-900 px-4 py-2 bg-tertiary text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all shadow-lg hover:shadow-xl"
               onClick={handleLeaveGameClick}
               disabled={leaving}
             >
@@ -2119,10 +2119,10 @@ function PlayPageContent() {
             </div>
           ) : (
             <button
-              className={`w-full px-6 py-4 rounded-xl font-bold text-lg shadow-lg transition-all disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 ${
+              className={`border border-b-4 border-emerald-900 w-full px-6 py-4 rounded-full font-bold text-lg shadow-lg transition-all disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 ${
                 currentQuestion.hasTimer && timeRemaining === 0
-                  ? 'bg-red-100 text-red-600 border-2 border-red-200'
-                  : 'bg-emerald-600 text-white hover:shadow-xl hover:scale-[1.02] transform disabled:opacity-50'
+                  ? 'bg-red-100 text-red-600 border-2 border-b-4 border-red-200'
+                  : 'bg-emerald-600 text-white border-b-4 border-emerald-600 hover:shadow-xl hover:scale-[1.02] transform disabled:opacity-50'
               }`}
               onClick={handleSubmitAnswer}
               disabled={
@@ -2178,10 +2178,10 @@ function PlayPageContent() {
 
         {/* Game Code */}
         <div className="rounded-2xl">
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100 shadow-xl">
             <p className="text-sm font-semibold text-slate-600 mb-1">Game code</p>
             <div className="flex items-center gap-3">
-              <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent tracking-wider">
+              <p className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-wider">
                 {code}
               </p>
               <div className="relative">
@@ -2216,7 +2216,7 @@ function PlayPageContent() {
         {/* Action Buttons */}
         <div className="flex justify-center gap-3">
           <button
-            className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all border border-slate-200"
+            className="border border-b-4 border-slate-800 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all"
             onClick={loadGame}
             title="Refresh game data"
           >
@@ -2228,7 +2228,7 @@ function PlayPageContent() {
             </span>
           </button>
           <button
-            className="px-4 py-2 bg-tertiary text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all"
+            className="border border-b-4 border-red-900 px-4 py-2 bg-tertiary text-white rounded-xl hover:from-red-600 hover:to-red-700 font-medium transition-all"
             onClick={handleLeaveGameClick}
             disabled={leaving}
           >

@@ -49,7 +49,7 @@ export default function Home() {
           </p>
           <Link 
             href="/host" 
-            className="block w-full px-8 py-4 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl hover:scale-105 transform transition-all duration-200 flex items-center justify-center gap-2 group"
+            className="border border-b-4 border-red-800 block w-full px-8 py-4 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl hover:scale-105 transform transition-all duration-200 flex items-center justify-center gap-2 group"
           >
             Host a game
           </Link>
@@ -58,7 +58,7 @@ export default function Home() {
           </div>
           <Link 
             href="/join" 
-            className="block w-full px-8 py-4 bg-gradient-to-r from-tertiary to-fourth text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl hover:scale-105 transform transition-all duration-200 flex items-center justify-center gap-2 group"
+            className="border border-b-4 border-red-800 block w-full px-8 py-4 bg-gradient-to-r from-tertiary to-fourth text-white rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl hover:scale-105 transform transition-all duration-200 flex items-center justify-center gap-2 group"
           >
             Join a game
           </Link>

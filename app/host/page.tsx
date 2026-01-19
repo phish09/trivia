@@ -97,7 +97,7 @@ export default function HostPage() {
             </div>
 
             <button
-              className="w-full px-6 py-3 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+              className="border border-b-4 border-red-800 w-full px-6 py-3 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
               onClick={handleCreate}
               disabled={loading || !name.trim()}
             >
@@ -128,7 +128,7 @@ export default function HostPage() {
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+              className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
               placeholder="Enter game code"
               value={existingCode}
               onChange={(e) => {
@@ -139,7 +139,7 @@ export default function HostPage() {
               maxLength={6}
             />
             <button
-              className="px-5 py-2 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
+              className="border border-b-4 border-red-800 px-5 py-2 bg-gradient-to-r from-secondary to-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transform transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center"
               onClick={handleJoinExisting}
               disabled={!existingCode.trim()}
             >

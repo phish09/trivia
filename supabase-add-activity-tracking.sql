@@ -7,3 +7,5 @@ UPDATE games SET last_activity = created_at WHERE last_activity IS NULL;
 
 
 
+
+
