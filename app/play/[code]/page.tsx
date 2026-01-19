@@ -43,6 +43,9 @@ function PlayPageContent() {
   });
   const audioContextRef = useRef<AudioContext | null>(null);
   const audioUnlockedRef = useRef<boolean>(false);
+  const answerButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const questionHeadingRef = useRef<HTMLHeadingElement | null>(null);
+  const statusAnnouncementRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -631,6 +634,31 @@ function PlayPageContent() {
     previousQuestionIndexRef.current = currentQuestionIndex;
   }, [game?.currentQuestionIndex, game?.answersRevealed, soundEnabled]);
 
+  // Focus management: Focus first answer when question changes
+  useEffect(() => {
+    if (!game || submitted) return;
+    
+    const currentQuestion = game.questions?.[game.currentQuestionIndex ?? -1];
+    if (!currentQuestion) return;
+
+    // Reset answer button refs array
+    if (currentQuestion.isTrueFalse) {
+      answerButtonRefs.current = new Array(2);
+    } else if (currentQuestion.choices) {
+      answerButtonRefs.current = new Array(currentQuestion.choices.length);
+    } else if (currentQuestion.isFillInBlank) {
+      // For fill-in-blank, focus will be handled by the textarea
+      return;
+    }
+
+    // Small delay to ensure DOM is updated
+    setTimeout(() => {
+      if (answerButtonRefs.current.length > 0 && answerButtonRefs.current[0]) {
+        answerButtonRefs.current[0].focus();
+      }
+    }, 100);
+  }, [game?.currentQuestionIndex, submitted]);
+
   // Play correct/wrong sound when answers are revealed
   const previousAnswersRevealedRef = useRef<boolean>(false);
   useEffect(() => {
@@ -922,7 +950,123 @@ function PlayPageContent() {
       return; // Timer expired, don't allow selection
     }
     setSelectedAnswer(answerIndex);
+    
+    // Announce selection to screen readers
+    if (statusAnnouncementRef.current) {
+      const answerText = currentQuestion?.isTrueFalse 
+        ? (answerIndex === 0 ? 'True' : 'False')
+        : currentQuestion?.choices?.[answerIndex] || `Option ${String.fromCharCode(65 + answerIndex)}`;
+      statusAnnouncementRef.current.textContent = `Selected: ${answerText}`;
+    }
   }
+
+  // Keyboard navigation handler for answer options
+  function handleAnswerKeyDown(
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    answerIndex: number,
+    totalAnswers: number,
+    isTrueFalse: boolean = false
+  ) {
+    if (submitted || !game || !playerId) return;
+    
+    const currentQuestion = game?.questions[game.currentQuestionIndex];
+    if (currentQuestion?.hasTimer && timeRemaining === 0) {
+      return; // Timer expired, don't allow navigation
+    }
+
+    let nextIndex: number | null = null;
+
+    if (isTrueFalse) {
+      // True/False: Left/Right arrows
+      if (e.key === 'ArrowLeft') {
+        nextIndex = answerIndex === 1 ? 0 : 1;
+      } else if (e.key === 'ArrowRight') {
+        nextIndex = answerIndex === 0 ? 1 : 0;
+      }
+    } else {
+      // Multiple choice: Up/Down arrows
+      if (e.key === 'ArrowDown') {
+        nextIndex = (answerIndex + 1) % totalAnswers;
+      } else if (e.key === 'ArrowUp') {
+        nextIndex = (answerIndex - 1 + totalAnswers) % totalAnswers;
+      }
+    }
+
+    // Space or Enter selects the current answer
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      handleAnswerSelect(answerIndex);
+      return;
+    }
+
+    // Navigate to next/previous answer
+    if (nextIndex !== null && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      // Update tabIndex: remove from current, add to next
+      const currentButton = answerButtonRefs.current[answerIndex];
+      const nextButton = nextIndex !== null ? answerButtonRefs.current[nextIndex] : null;
+      
+      if (currentButton) {
+        currentButton.tabIndex = -1;
+      }
+      if (nextButton && nextIndex !== null) {
+        nextButton.tabIndex = 0;
+        nextButton.focus();
+        handleAnswerSelect(nextIndex);
+      }
+    }
+  }
+
+  // Update tabIndex when selectedAnswer changes (for roving tabindex pattern)
+  useEffect(() => {
+    if (!game || submitted) return;
+    
+    const currentQuestion = game.questions?.[game.currentQuestionIndex ?? -1];
+    if (!currentQuestion || currentQuestion.isFillInBlank) return;
+
+    const totalAnswers = currentQuestion.isTrueFalse ? 2 : currentQuestion.choices?.length || 0;
+    
+    // Update tabIndex for all answer buttons
+    answerButtonRefs.current.forEach((button, idx) => {
+      if (!button) return;
+      if (currentQuestion.isTrueFalse) {
+        // True/False: selected answer or first if none selected
+        button.tabIndex = (selectedAnswer === idx || (selectedAnswer === null && idx === 0)) ? 0 : -1;
+      } else {
+        // Multiple choice: selected answer or first if none selected
+        button.tabIndex = (selectedAnswer === idx || (selectedAnswer === null && idx === 0)) ? 0 : -1;
+      }
+    });
+  }, [selectedAnswer, game?.currentQuestionIndex, submitted]);
+
+  // Announce timer expiration
+  useEffect(() => {
+    if (!game || !statusAnnouncementRef.current) return;
+    
+    const currentQuestion = game.questions?.[game.currentQuestionIndex ?? -1];
+    if (currentQuestion?.hasTimer && timeRemaining === 0 && !submitted) {
+      statusAnnouncementRef.current.textContent = "Time expired. Answer submission disabled.";
+    }
+  }, [timeRemaining, game?.currentQuestionIndex, submitted]);
+
+  // Announce when new question loads
+  useEffect(() => {
+    if (!game || !statusAnnouncementRef.current || submitted) return;
+    
+    const currentQuestion = game.questions?.[game.currentQuestionIndex ?? -1];
+    if (currentQuestion) {
+      const questionType = currentQuestion.isTrueFalse 
+        ? "True or False" 
+        : currentQuestion.isFillInBlank 
+        ? "Fill in the blank" 
+        : "Multiple choice";
+      const pointsText = `${currentQuestion.points} point${currentQuestion.points !== 1 ? 's' : ''}`;
+      const timerText = currentQuestion.hasTimer 
+        ? ` with ${currentQuestion.timerSeconds || 30} second timer` 
+        : '';
+      statusAnnouncementRef.current.textContent = `New question: ${questionType}, ${pointsText}${timerText}. Use arrow keys to navigate options, Space or Enter to select.`;
+    }
+  }, [game?.currentQuestionIndex, submitted]);
 
   // Debounced handler for text answer input
   function handleTextAnswerChange(value: string) {
@@ -994,6 +1138,12 @@ function PlayPageContent() {
         await submitAnswer(playerId, currentQuestion.id, selectedAnswer, undefined, wagerAmount);
       }
       setSubmitted(true);
+      
+      // Announce submission to screen readers
+      if (statusAnnouncementRef.current) {
+        statusAnnouncementRef.current.textContent = "Answer submitted. Waiting for other players.";
+      }
+      
       // Refresh game state after submitting answer
       await loadGame();
     } catch (error: any) {
@@ -1921,7 +2071,7 @@ function PlayPageContent() {
           <div className="mb-6">
             <div className="flex items-center justify-center mb-4">
               <div className="text-sm text-slate-600">
-                <span className="font-semibold text-emerald-600 bg-emerald-100 rounded-full px-3 py-1">{currentQuestion.points} pts</span>
+                <span className="font-bold text-emerald-600 border border-b-2 border-emerald-600 bg-emerald-100 rounded-full px-3 py-1">{currentQuestion.points} pts</span>
                 {currentQuestion.multiplier > 1 && (
                   <span className="ml-2 px-2 py-1 bg-tertiary text-white rounded-full font-bold">
                     {currentQuestion.multiplier}x
@@ -1949,15 +2099,35 @@ function PlayPageContent() {
                 )}
               </div>
             )}
-            <h2 className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-2 md:px-12 text-center">{formatQuestionText(currentQuestion.text)}</h2>
+            <h2 
+              id="question-text"
+              ref={questionHeadingRef}
+              className="text-lg md:text-2xl font-bold text-slate-800 mb-6 pb-6 border-b border-slate-200 px-2 md:px-12 text-center"
+            >
+              {formatQuestionText(currentQuestion.text)}
+            </h2>
           </div>
+
+          {/* Screen reader announcements */}
+          <div
+            ref={statusAnnouncementRef}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+          />
 
           {currentQuestion.isFillInBlank ? (
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Your Answer</label>
+                <label htmlFor="fill-in-answer" className="block text-sm font-semibold text-slate-700 mb-2">
+                  Your Answer
+                </label>
                 <textarea
-                  className={`w-full px-4 py-3 border-2 rounded-xl outline-none transition-all resize-none ${
+                  id="fill-in-answer"
+                  aria-label="Your answer"
+                  aria-required="true"
+                  className={`w-full px-4 py-3 border-2 rounded-xl outline-none transition-all resize-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                     (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
                       ? "border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed opacity-60"
                       : "border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
@@ -1967,13 +2137,22 @@ function PlayPageContent() {
                   value={textAnswerDisplay}
                   onChange={(e) => handleTextAnswerChange(e.target.value)}
                   disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
+                  aria-disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
                 />
               </div>
             </div>
           ) : currentQuestion.isTrueFalse ? (
-            <div className="grid grid-cols-2 gap-6 mb-6">
+            <div 
+              role="radiogroup" 
+              aria-labelledby="question-text"
+              className="grid grid-cols-2 gap-6 mb-6"
+            >
               <button
-                className={`p-6 border-2 rounded-xl transition-all ${
+                ref={(el) => { answerButtonRefs.current[0] = el; }}
+                role="radio"
+                aria-checked={selectedAnswer === 0}
+                aria-label="True"
+                className={`p-6 border-2 rounded-xl transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   selectedAnswer === 0
                     ? "bg-gradient-to-r from-green-500 to-emerald-600 text-white border-green-600 shadow-lg scale-[1.02]"
                     : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
@@ -1981,7 +2160,9 @@ function PlayPageContent() {
                     : "bg-white border-slate-200 hover:border-green-300 hover:bg-green-50 hover:shadow-md"
                 }`}
                 onClick={() => handleAnswerSelect(0)}
+                onKeyDown={(e) => handleAnswerKeyDown(e, 0, 2, true)}
                 disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
+                tabIndex={selectedAnswer === 0 || (selectedAnswer === null) ? 0 : -1}
               >
                 <div className="flex flex-col items-center gap-3">
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
@@ -1991,7 +2172,7 @@ function PlayPageContent() {
                       ? "bg-slate-300"
                       : "bg-slate-200"
                   }`}>
-                    <svg className={`w-8 h-8 ${selectedAnswer === 0 ? "text-green-600" : "text-slate-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-8 h-8 ${selectedAnswer === 0 ? "text-green-600" : "text-slate-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
@@ -1999,7 +2180,11 @@ function PlayPageContent() {
                 </div>
               </button>
               <button
-                className={`p-6 border-2 rounded-xl transition-all ${
+                ref={(el) => { answerButtonRefs.current[1] = el; }}
+                role="radio"
+                aria-checked={selectedAnswer === 1}
+                aria-label="False"
+                className={`p-6 border-2 rounded-xl transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                   selectedAnswer === 1
                     ? "bg-gradient-to-r from-red-500 to-rose-600 text-white border-red-600 shadow-lg scale-[1.02]"
                     : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
@@ -2007,7 +2192,9 @@ function PlayPageContent() {
                     : "bg-white border-slate-200 hover:border-red-300 hover:bg-red-50 hover:shadow-md"
                 }`}
                 onClick={() => handleAnswerSelect(1)}
+                onKeyDown={(e) => handleAnswerKeyDown(e, 1, 2, true)}
                 disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
+                tabIndex={selectedAnswer === 1 ? 0 : -1}
               >
                 <div className="flex flex-col items-center gap-3">
                   <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
@@ -2017,7 +2204,7 @@ function PlayPageContent() {
                       ? "bg-slate-300"
                       : "bg-slate-200"
                   }`}>
-                    <svg className={`w-8 h-8 ${selectedAnswer === 1 ? "text-red-600" : "text-slate-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className={`w-8 h-8 ${selectedAnswer === 1 ? "text-red-600" : "text-slate-500"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
                     </svg>
                   </div>
@@ -2026,28 +2213,46 @@ function PlayPageContent() {
               </button>
             </div>
           ) : (
-            <div className="space-y-3 mb-6">
-              {currentQuestion.choices.map((choice: string, idx: number) => (
-                <button
-                  key={idx}
-                  className={`w-full text-sm md:text-lg text-left py-3 px-4 md:py-5 md:px-8 border-2 rounded-full transition-all ${
-                    selectedAnswer === idx
-                      ? "text-white border-secondary shadow-lg scale-[1.02]"
-                      : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
-                      ? "bg-slate-100 border-slate-300 cursor-not-allowed opacity-60 text-slate-500"
-                      : "bg-white border-slate-200 hover:border-secondary hover:shadow-md"
-                  }`}
-                  style={selectedAnswer === idx ? {
-                    background: `linear-gradient(to right, var(--tertiary), var(--fourth-hover))`,
-                  } : {}}
-                  onClick={() => handleAnswerSelect(idx)}
-                  disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium">{choice}</span>
-                  </div>
-                </button>
-              ))}
+            <div 
+              role="radiogroup" 
+              aria-labelledby="question-text"
+              aria-required="true"
+              className="space-y-3 mb-6"
+            >
+              {currentQuestion.choices.map((choice: string, idx: number) => {
+                const optionLetter = String.fromCharCode(65 + idx); // A, B, C, D, etc.
+                const isSelected = selectedAnswer === idx;
+                // Roving tabindex: only selected answer (or first if none selected) is in tab order
+                const tabIndex = isSelected || (selectedAnswer === null && idx === 0) ? 0 : -1;
+                
+                return (
+                  <button
+                    key={idx}
+                    ref={(el) => { answerButtonRefs.current[idx] = el; }}
+                    role="radio"
+                    aria-checked={isSelected}
+                    aria-label={`Option ${optionLetter}: ${choice}`}
+                    className={`w-full text-sm md:text-lg text-left py-3 px-4 md:py-5 md:px-8 border-2 rounded-full transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                      isSelected
+                        ? "text-white border-secondary shadow-lg scale-[1.02]"
+                        : (submitted || (currentQuestion.hasTimer && timeRemaining === 0))
+                        ? "bg-slate-100 border-slate-300 cursor-not-allowed opacity-60 text-slate-500"
+                        : "bg-white border-slate-200 hover:border-secondary hover:shadow-md"
+                    }`}
+                    style={isSelected ? {
+                      background: `linear-gradient(to right, var(--tertiary), var(--fourth-hover))`,
+                    } : {}}
+                    onClick={() => handleAnswerSelect(idx)}
+                    onKeyDown={(e) => handleAnswerKeyDown(e, idx, currentQuestion.choices.length, false)}
+                    disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
+                    tabIndex={tabIndex}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">{choice}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
 
@@ -2057,21 +2262,28 @@ function PlayPageContent() {
                 ? "bg-slate-50 border-slate-300 opacity-60"
                 : "bg-yellow-50 border-yellow-200"
             }`}>
-              <label className={`block text-sm font-semibold mb-2 ${
-                (currentQuestion.hasTimer && timeRemaining === 0)
-                  ? "text-slate-500"
-                  : "text-slate-700"
-              }`}>
+              <label 
+                htmlFor="wager-input"
+                className={`block text-sm font-semibold mb-2 ${
+                  (currentQuestion.hasTimer && timeRemaining === 0)
+                    ? "text-slate-500"
+                    : "text-slate-700"
+                }`}
+              >
                 Wager (optional)
               </label>
               <div className="flex items-center gap-3">
                 <input
+                  id="wager-input"
                   type="number"
                   min="0"
                   max={currentQuestion.maxWager || 10}
                   step="1"
                   inputMode="numeric"
-                  className={`w-32 px-4 py-2 rounded-xl outline-none transition-all ${
+                  aria-label="Wager amount"
+                  aria-describedby="wager-description"
+                  aria-disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
+                  className={`w-32 px-4 py-2 rounded-xl outline-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-yellow-500 focus-visible:ring-offset-2 ${
                     (currentQuestion.hasTimer && timeRemaining === 0)
                       ? "bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed"
                       : "bg-white border-2 border-slate-200 focus:border-yellow-500 focus:ring-2 focus:ring-yellow-200"
@@ -2095,11 +2307,14 @@ function PlayPageContent() {
                   / {currentQuestion.maxWager || 10} max
                 </span>
               </div>
-              <p className={`text-xs mt-2 ${
-                (currentQuestion.hasTimer && timeRemaining === 0)
-                  ? "text-slate-500"
-                  : "text-slate-800"
-              }`}>
+              <p 
+                id="wager-description"
+                className={`text-xs mt-2 ${
+                  (currentQuestion.hasTimer && timeRemaining === 0)
+                    ? "text-slate-500"
+                    : "text-slate-800"
+                }`}
+              >
                 {wager > 0 ? (
                   <>
                     If correct: +{wager + (currentQuestion.points * (currentQuestion.multiplier || 1))} points ({wager} wager + {currentQuestion.points * (currentQuestion.multiplier || 1)} base). If wrong: -{wager} points.
@@ -2112,14 +2327,19 @@ function PlayPageContent() {
           )}
 
           {submitted ? (
-            <div className="bg-primary/10 border-2 border-secondary rounded-xl p-6 text-center">
-              <p className="text-secondary font-semibold flex flex-col items-center justify-center gap-1 text-sm">
-                Answer submitted.<br /><span className="text-xs text-slate-500">Waiting for other players...</span>
+            <div className="bg-primary/10 border border-secondary rounded-xl p-6 text-center">
+              <p className="text-secondary font-semibold flex flex-col items-center justify-center gap-1 text-base">
+                Answer submitted.<br /><span className="text-xs text-slate-700">Waiting for other players...</span>
               </p>
             </div>
           ) : (
             <button
-              className={`border border-b-4 border-emerald-900 w-full px-6 py-4 rounded-full font-bold text-lg shadow-lg transition-all disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 ${
+              aria-label="Submit answer"
+              aria-disabled={
+                (currentQuestion.hasTimer && timeRemaining === 0) ||
+                (currentQuestion.isFillInBlank ? !(textAnswerDisplay.trim() || textAnswer.trim()) : selectedAnswer === null)
+              }
+              className={`border border-b-4 border-emerald-900 w-full px-6 py-4 rounded-full font-bold text-lg shadow-lg transition-all disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                 currentQuestion.hasTimer && timeRemaining === 0
                   ? 'bg-red-100 text-red-600 border-2 border-b-4 border-red-200'
                   : 'bg-emerald-600 text-white border-b-4 border-emerald-600 hover:shadow-xl hover:scale-[1.02] transform disabled:opacity-50'
