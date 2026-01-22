@@ -1,6 +1,6 @@
 "use client";
 
-import { RefObject } from "react";
+import React from "react";
 
 interface Question {
   text: string;
@@ -14,7 +14,7 @@ interface QuestionDisplayProps {
   currentQuestion: Question;
   timeRemaining: number | null;
   answersRevealed: boolean;
-  questionHeadingRef: RefObject<HTMLHeadingElement>;
+  questionHeadingRef: React.MutableRefObject<HTMLHeadingElement | null>;
   formatQuestionText: (text: string) => React.ReactNode;
 }
 

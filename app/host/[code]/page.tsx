@@ -6,7 +6,7 @@ import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, 
 import { useRouter } from "next/navigation";
 import { useConfetti } from "@/hooks/useConfetti";
 import { useTimer } from "@/hooks/useTimer";
-import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
+import { useHostGame } from "@/hooks/useHostGame";
 import Modal from "@/components/Modal";
 import QuestionForm from "@/components/QuestionForm";
 import QuestionList from "@/components/QuestionList";
@@ -18,7 +18,20 @@ function HostGameContent() {
   const params = useParams();
   const router = useRouter();
   const code = params.code as string;
-  const [game, setGame] = useState<any>(null);
+  
+  // Use custom hook for game state and password management
+  const {
+    game,
+    passwordPrompt,
+    passwordError,
+    passwordVerified,
+    passwordInput,
+    setPasswordInput,
+    setPasswordError,
+    handlePasswordSubmit,
+    loadGame,
+  } = useHostGame({ code });
+  
   const [ending, setEnding] = useState(false);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editQuestionText, setEditQuestionText] = useState("");
@@ -37,13 +50,9 @@ function HostGameContent() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const previousGameEndedRef = useRef<boolean>(false);
-  const [passwordPrompt, setPasswordPrompt] = useState(false);
   const [isRevealing, setIsRevealing] = useState(false);
   const [savingStatus, setSavingStatus] = useState<Record<string, 'saving' | 'saved' | null>>({});
   const saveTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [passwordVerified, setPasswordVerified] = useState(false);
   const [minimizedSections, setMinimizedSections] = useState<Record<string, boolean>>({
     hostGame: false,
     gameControl: false,
@@ -61,91 +70,6 @@ function HostGameContent() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{success: boolean, message: string} | null>(null);
   const [exporting, setExporting] = useState(false);
-
-  useEffect(() => {
-    checkPassword();
-  }, [code]);
-
-
-  async function checkPassword() {
-    // Check if password is stored in sessionStorage
-    const storedPassword = sessionStorage.getItem(`host_password_${code}`);
-    if (storedPassword) {
-      try {
-        const isValid = await verifyHostPassword(code, storedPassword);
-        if (isValid) {
-          setPasswordVerified(true);
-          loadGame();
-          return;
-        }
-      } catch (error) {
-        // Password invalid or game not found, show prompt
-      }
-    }
-    
-    // Check if game requires password
-    try {
-      const gameData = await getGame(code);
-      // If game has a password and we haven't verified, show prompt
-      if (gameData.hostPassword && !storedPassword) {
-        setPasswordPrompt(true);
-      } else {
-        // No password required or already verified
-        setPasswordVerified(true);
-        loadGame();
-      }
-    } catch (error) {
-      // Game not found or error, try to show prompt
-      // But first check if we have a stored password
-      if (!storedPassword) {
-        setPasswordPrompt(true);
-      } else {
-        // We have stored password but game fetch failed, try loading anyway
-        setPasswordVerified(true);
-        loadGame();
-      }
-    }
-  }
-
-  async function handlePasswordSubmit() {
-    if (!passwordInput.trim()) {
-      setPasswordError("Please enter a password");
-      return;
-    }
-    
-    try {
-      const isValid = await verifyHostPassword(code, passwordInput.trim());
-      if (isValid) {
-        // Store password in sessionStorage
-        sessionStorage.setItem(`host_password_${code}`, passwordInput.trim());
-        setPasswordVerified(true);
-        setPasswordPrompt(false);
-        setPasswordError(null);
-        loadGame();
-      } else {
-        setPasswordError("Incorrect password. Please try again.");
-        setPasswordInput("");
-      }
-    } catch (error: any) {
-      setPasswordError(error?.message || "Failed to verify password. Please try again.");
-    }
-  }
-
-  const loadGame = useCallback(async () => {
-    try {
-      const gameData = await getGame(code);
-      setGame(gameData);
-    } catch (error) {
-      console.error("Failed to load game:", error);
-    }
-  }, [code]);
-
-  // Set up Supabase Realtime subscription for instant updates
-  useRealtimeSubscription({
-    game,
-    onGameUpdate: loadGame,
-    enablePolling: true,
-  });
 
   // Timer countdown logic - using server-provided time
   const timeRemaining = useTimer({
@@ -634,11 +558,6 @@ function HostGameContent() {
         {game.gameEnded && (
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-2xl shadow-xl p-6">
             <div className="flex md:flex-row flex-col items-start md:items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-xl">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-                </svg>
-              </div>
               <div className="flex-1">
                 <h2 className="text-2xl font-bold text-slate-800 mb-1">Game ended</h2>
                 <p className="text-slate-600">The winner is <span className="font-bold text-yellow-700">{sortedPlayers[0]?.username || "N/A"}</span> with <span className="font-bold text-yellow-700">{sortedPlayers[0]?.score || 0} points</span>!</p>

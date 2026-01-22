@@ -1263,10 +1263,10 @@ function PlayPageContent() {
 
           {/* Winner Card */}
           {winner && (
-            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 rounded-2xl shadow-xl p-6 border-2 border-yellow-300">
+            <div className="border-2 border-b-6 border-amber-500 bg-gradient-to-br from-yellow-50 to-amber-50 rounded-2xl shadow-xl p-6">
               <div className="text-center">
                 <div className="inline-block mb-4">
-                  <div className="w-20 h-20 bg-gradient-to-br from-yellow-400 to-amber-500 rounded-full flex items-center justify-center shadow-lg">
+                  <div className="w-20 h-20 bg-yellow-400 rounded-full flex items-center justify-center border-2 border-b-5 border-yellow-600">
                     <span className="text-4xl">👑</span>
                   </div>
                 </div>
@@ -1274,7 +1274,7 @@ function PlayPageContent() {
                   {winner.username}
                 </h2>
                 <p className="text-slate-800 mb-4">🍗 Winner winner. Chicken dinner! 🍗</p>
-                <div className="inline-block px-6 py-3 bg-gradient-to-r from-yellow-400 to-amber-500 rounded-xl shadow-lg">
+                <div className="inline-block border border-b-4 border-amber-900 px-6 py-3 bg-gradient-to-r from-amber-500 to-amber-600 rounded-xl shadow-lg">
                   <span className="text-2xl font-bold text-white">
                     {winner.score || 0} points
                   </span>
@@ -1294,13 +1294,13 @@ function PlayPageContent() {
                   key={player.id} 
                   className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
                     index === 0 
-                      ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300 shadow-md' 
+                      ? 'border-2 border-b-5 border-amber-500 bg-gradient-to-br from-yellow-50 to-amber-50 shadow-md' 
                       : index === 1 
-                        ? 'bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300' 
+                        ? 'border-2 border-b-5 border-slate-500 bg-gradient-to-br from-slate-50 to-gray-50' 
                         : index === 2 
-                          ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-300' 
+                          ? 'border-2 border-b-5 border-orange-500 bg-gradient-to-br from-orange-50 to-amber-50' 
                           : 'bg-slate-50 border-slate-200'
-                  } ${player.id === playerId ? 'ring-2 ring-blue-400' : ''}`}
+                  } ${player.id === playerId ? 'ring-3 ring-primary' : ''}`}
                 >
                   <div className="flex items-center gap-4">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
@@ -1316,7 +1316,7 @@ function PlayPageContent() {
                     </div>
                     <div>
                       <span className={`font-bold text-sm ${
-                        player.id === playerId ? 'text-blue-700' : 'text-slate-800'
+                        player.id === playerId ? 'text-primary' : 'text-slate-800'
                       }`}>
                         {player.username} {index === 0 && '👑'}
                         {player.id === playerId && ' (You)'}
@@ -1797,7 +1797,7 @@ function PlayPageContent() {
                   ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-700 border-b-6" 
                   : "bg-gradient-to-r from-red-50 to-pink-50 border-red-700 border-b-6"
               }`}>
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     {isCorrect ? (
                       <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
@@ -1831,7 +1831,7 @@ function PlayPageContent() {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  <div className="md:text-right flex-shrink-0">
                     {currentQuestion.hasWager && playerAnswer?.wager && playerAnswer.wager > 0 ? (
                       <p className={`font-bold text-lg ${isCorrect ? "text-green-700" : "text-red-700"}`}>
                         {isCorrect ? `+${pointsEarned}` : pointsEarned} points {isCorrect ? "(wagered)" : "(lost wager)"}

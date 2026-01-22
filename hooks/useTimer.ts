@@ -81,12 +81,9 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
           const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
           setTimeRemaining(remaining);
         }
-      } else {
-        // Question hasn't changed but sync with server time if available
-        if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
-          setTimeRemaining(game.timeRemaining);
-        }
       }
+      // Don't sync here if question/start time hasn't changed - let the sync interval handle it
+      // This prevents the timer from jumping when game.timeRemaining updates after submission
 
       // Update the ref AFTER initializing
       previousQuestionStartTimeRef.current = game.questionStartTime;
@@ -102,11 +99,13 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
       previousQuestionStartTimeRef.current = null;
     }
   }, [
-    game?.timeRemaining,
     game?.currentQuestionIndex,
     game?.answersRevealed,
     game?.questionStartTime,
     submitted,
+    // Note: game?.timeRemaining is intentionally NOT in dependencies
+    // to prevent re-initialization when server updates time after submission
+    // The sync interval handles ongoing synchronization
   ]);
 
   // Countdown interval - syncs with server and decrements
@@ -119,10 +118,21 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
     }
 
     // Sync with server every 2 seconds to keep in sync
+    // Only sync DOWN (when server time is less) to prevent flickering/jumping up
     const syncInterval = setInterval(() => {
       if (game?.timeRemaining !== null && game?.timeRemaining !== undefined) {
-        // Always sync with server - it's the source of truth
-        setTimeRemaining(game.timeRemaining);
+        // Only sync if server time is less than or equal to current time
+        // This prevents the timer from jumping UP when syncing
+        setTimeRemaining((prev) => {
+          if (prev === null) return game.timeRemaining;
+          // Only update if server time is less (we're behind) or very close (within 1 second)
+          // This prevents jumps up while allowing corrections when we're behind
+          if (game.timeRemaining <= prev || Math.abs(game.timeRemaining - prev) <= 1) {
+            return game.timeRemaining;
+          }
+          // If server time is significantly more, keep local time (prevents jump up)
+          return prev;
+        });
       } else if (
         game?.questionStartTime &&
         game?.questions?.[game.currentQuestionIndex || 0]?.hasTimer
@@ -138,7 +148,14 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
               const now = Date.now();
               const elapsed = Math.floor((now - startTime) / 1000);
               const remaining = Math.max(0, timerSeconds - elapsed);
-              setTimeRemaining(remaining);
+              // Only sync down, not up
+              setTimeRemaining((prev) => {
+                if (prev === null) return remaining;
+                if (remaining <= prev || Math.abs(remaining - prev) <= 1) {
+                  return remaining;
+                }
+                return prev;
+              });
             }
           }
         }
