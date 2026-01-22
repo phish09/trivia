@@ -1,7 +1,8 @@
 // Cookie utilities for persistent player identification
 
+import { COOKIE_EXPIRY_DAYS, STORAGE_KEYS } from "./constants";
+
 const PERSISTENT_PLAYER_ID_COOKIE = "trivia_persistent_player_id";
-const COOKIE_EXPIRY_DAYS = 365; // 1 year
 
 /**
  * Get a persistent player ID from cookie, or generate and store a new one
@@ -36,13 +37,13 @@ export function storePlayerMapping(persistentPlayerId: string, gameCode: string,
   if (typeof window === "undefined") return;
   
   try {
-    const key = `player_mapping_${persistentPlayerId}_${gameCode}`;
+    const key = `${STORAGE_KEYS.PLAYER_MAPPING_PREFIX}${persistentPlayerId}_${gameCode}`;
     localStorage.setItem(key, playerId);
     
     // Also store in a lookup object for easier retrieval
     const mappings = getPlayerMappings();
     mappings[`${persistentPlayerId}_${gameCode}`] = playerId;
-    localStorage.setItem("trivia_player_mappings", JSON.stringify(mappings));
+    localStorage.setItem(STORAGE_KEYS.PLAYER_MAPPINGS, JSON.stringify(mappings));
   } catch (error) {
     console.error("Failed to store player mapping:", error);
   }
@@ -56,7 +57,7 @@ export function getPlayerIdForGame(persistentPlayerId: string, gameCode: string)
   
   try {
     // Try direct lookup first
-    const key = `player_mapping_${persistentPlayerId}_${gameCode}`;
+    const key = `${STORAGE_KEYS.PLAYER_MAPPING_PREFIX}${persistentPlayerId}_${gameCode}`;
     const playerId = localStorage.getItem(key);
     if (playerId) return playerId;
     
@@ -76,7 +77,7 @@ function getPlayerMappings(): Record<string, string> {
   if (typeof window === "undefined") return {};
   
   try {
-    const stored = localStorage.getItem("trivia_player_mappings");
+    const stored = localStorage.getItem(STORAGE_KEYS.PLAYER_MAPPINGS);
     return stored ? JSON.parse(stored) : {};
   } catch (error) {
     return {};
@@ -97,12 +98,12 @@ export function clearPlayerMapping(persistentPlayerId: string, gameCode: string)
   if (typeof window === "undefined") return;
   
   try {
-    const key = `player_mapping_${persistentPlayerId}_${gameCode}`;
+    const key = `${STORAGE_KEYS.PLAYER_MAPPING_PREFIX}${persistentPlayerId}_${gameCode}`;
     localStorage.removeItem(key);
     
     const mappings = getPlayerMappings();
     delete mappings[`${persistentPlayerId}_${gameCode}`];
-    localStorage.setItem("trivia_player_mappings", JSON.stringify(mappings));
+    localStorage.setItem(STORAGE_KEYS.PLAYER_MAPPINGS, JSON.stringify(mappings));
   } catch (error) {
     console.error("Failed to clear player mapping:", error);
   }

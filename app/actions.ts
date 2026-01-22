@@ -2,8 +2,31 @@
 
 import { getSupabaseClient } from "@/lib/db";
 import { generateGameCode } from "@/lib/util";
+import type { 
+  QuestionInput, 
+  Game, 
+  CreateGameResult, 
+  JoinGameResult,
+  ImportQuestionsResult,
+  DatabaseQuestion,
+  DatabasePlayer,
+  DatabasePlayerAnswer,
+  DatabaseGame
+} from "@/types/game";
+import { 
+  normalizeError, 
+  getUserFriendlyMessage, 
+  logError, 
+  isNetworkError,
+  createError,
+  TriviaError
+} from "@/lib/errorHandler";
+import { 
+  GAME_EXPIRY_MS, 
+  QUESTION_ORDER_FALLBACK 
+} from "@/lib/constants";
 
-export async function createGame(hostName: string, password?: string) {
+export async function createGame(hostName: string, password?: string): Promise<CreateGameResult> {
   try {
     const supabase = getSupabaseClient();
     const code = generateGameCode();
@@ -14,55 +37,61 @@ export async function createGame(hostName: string, password?: string) {
       .single();
     
     if (error) {
-      console.error("Supabase error:", error);
-      throw new Error(error.message || `Failed to create game: ${JSON.stringify(error)}`);
-    }
-    return data;
-  } catch (error: any) {
-    console.error("createGame error:", error);
-    console.error("Error details:", {
-      name: error?.name,
-      message: error?.message,
-      cause: error?.cause,
-      stack: error?.stack,
-    });
-    
-    // Handle fetch errors specifically - check for TypeError or fetch failed message
-    const errorMessage = error?.message || error?.toString() || "";
-    const isFetchError = error instanceof TypeError || 
-                        errorMessage.includes("fetch failed") ||
-                        errorMessage.includes("Failed to fetch") ||
-                        error?.name === "TypeError";
-    
-    if (isFetchError) {
-      const envUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const actualUrl = envUrl || "https://lfmqhoijffrbmvadzamg.supabase.co";
-      const envStatus = envUrl ? "✅ Using URL from .env.local" : "⚠️ Using hardcoded default (env vars not loaded)";
-      
-      throw new Error(
-        `Failed to connect to Supabase database.\n\n` +
-        `${envStatus}\n` +
-        `Attempting to connect to: ${actualUrl}\n\n` +
-        `Please check:\n` +
-        `1. Your Supabase project is active (not paused) at ${actualUrl}\n` +
-        `2. Your internet connection is working\n` +
-        `3. Your .env.local file has the correct NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY\n` +
-        `4. You have restarted your Next.js dev server after updating .env.local\n` +
-        `5. Your Node.js version is compatible (try Node.js 18.15+)`
+      logError(error, "createGame");
+      throw createError(
+        error.message || `Failed to create game: ${JSON.stringify(error)}`,
+        "SUPABASE_ERROR"
       );
     }
     
-    // If it's already an Error with a message, re-throw it
-    if (error instanceof Error && error.message) {
+    if (!data) {
+      throw createError("Failed to create game: No data returned", "NO_DATA");
+    }
+    
+    return data;
+  } catch (error) {
+    const normalized = normalizeError(error);
+    
+    // Check if this is an environment variable error
+    if (normalized.message.includes("Missing required environment variable")) {
+      throw createError(
+        normalized.message,
+        "MISSING_ENV_VAR",
+        true
+      );
+    }
+    
+    // Handle network errors with helpful message
+    if (isNetworkError(error)) {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "not configured";
+      throw createError(
+        `Failed to connect to Supabase database.\n\n` +
+        `Attempting to connect to: ${url}\n\n` +
+        `Please check:\n` +
+        `1. Your Supabase project is active (not paused)\n` +
+        `2. Your internet connection is working\n` +
+        `3. Your .env.local file has the correct NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY\n` +
+        `4. You have restarted your Next.js dev server after updating .env.local\n` +
+        `5. Your Node.js version is compatible (try Node.js 18.15+)`,
+        "NETWORK_ERROR",
+        true
+      );
+    }
+    
+    // Re-throw TriviaError as-is
+    if (error instanceof TriviaError) {
       throw error;
     }
     
-    // Otherwise, create a new error with the message or string representation
-    throw new Error(error?.message || error?.toString() || "Unknown error occurred");
+    // Wrap unknown errors
+    throw createError(
+      normalized.message || "Unknown error occurred",
+      "UNKNOWN_ERROR"
+    );
   }
 }
 
-export async function verifyPlayerSession(playerId: string, gameCode: string) {
+export async function verifyPlayerSession(playerId: string, gameCode: string): Promise<{ id: string; username: string } | null> {
   const supabase = getSupabaseClient();
   const { data: game } = await supabase
     .from("games")
@@ -102,7 +131,7 @@ export async function kickPlayer(playerId: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function joinGame(code: string, username: string, existingPlayerId?: string | null) {
+export async function joinGame(code: string, username: string, existingPlayerId?: string | null): Promise<JoinGameResult> {
   const supabase = getSupabaseClient();
   const { data: game, error: gameError } = await supabase
     .from("games")
@@ -151,20 +180,7 @@ export async function joinGame(code: string, username: string, existingPlayerId?
   return data;
 }
 
-export async function addQuestion(gameId: string, q: {
-  text: string;
-  choices: string[];
-  answer: number;
-  points: number;
-  multiplier: number;
-  isFillInBlank?: boolean;
-  isTrueFalse?: boolean;
-  hasTimer?: boolean;
-  timerSeconds?: number;
-  fillInBlankAnswer?: string;
-  hasWager?: boolean;
-  maxWager?: number;
-}) {
+export async function addQuestion(gameId: string, q: QuestionInput) {
   const supabase = getSupabaseClient();
   // Get the current max question_order for this game to add new question at the end
   const { data: existingQuestions } = await supabase
@@ -178,7 +194,7 @@ export async function addQuestion(gameId: string, q: {
     ? (existingQuestions[0].question_order || 0) + 1 
     : 0;
   
-  const insertData: any = {
+  const insertData: Record<string, unknown> = {
     text: q.text,
     choices: q.choices,
     answer: q.answer,
@@ -226,22 +242,9 @@ export async function addQuestion(gameId: string, q: {
   return data;
 }
 
-export async function updateQuestion(questionId: string, q: {
-  text: string;
-  choices: string[];
-  answer: number;
-  points: number;
-  multiplier: number;
-  isFillInBlank?: boolean;
-  isTrueFalse?: boolean;
-  hasTimer?: boolean;
-  timerSeconds?: number;
-  fillInBlankAnswer?: string;
-  hasWager?: boolean;
-  maxWager?: number;
-}) {
+export async function updateQuestion(questionId: string, q: QuestionInput) {
   const supabase = getSupabaseClient();
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     text: q.text,
     choices: q.choices,
     answer: q.answer,
@@ -396,22 +399,21 @@ export async function getGame(code: string) {
   if (gameError || !game) throw new Error("Game not found");
 
   // Check if game should be deleted:
-  // 1. Not started AND older than 30 days from creation
-  // 2. Started BUT inactive for 30 days from last_activity
+  // 1. Not started AND older than GAME_EXPIRY_DAYS from creation
+  // 2. Started BUT inactive for GAME_EXPIRY_DAYS from last_activity
   const gameStarted = game.game_started || false;
-  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
   const now = Date.now();
   
   let shouldDelete = false;
   if (!gameStarted) {
     // Not started: check age from creation
     const gameAge = now - new Date(game.created_at).getTime();
-    shouldDelete = gameAge > thirtyDays;
+    shouldDelete = gameAge > GAME_EXPIRY_MS;
   } else {
     // Started: check inactivity from last_activity
     const lastActivity = game.last_activity || game.created_at;
     const inactivityPeriod = now - new Date(lastActivity).getTime();
-    shouldDelete = inactivityPeriod > thirtyDays;
+    shouldDelete = inactivityPeriod > GAME_EXPIRY_MS;
   }
   
   if (shouldDelete) {
@@ -493,7 +495,7 @@ export async function getGame(code: string) {
         hasWager: q.has_wager || false,
         maxWager: q.max_wager || null,
       })),
-    players: (playersWithScores || []).map((p: any) => ({
+    players: (playersWithScores || []).map((p: DatabasePlayer) => ({
       id: p.id,
       username: p.username,
       score: p.score || 0,
@@ -523,7 +525,7 @@ export async function activateQuestion(gameId: string, questionIndex: number) {
     .single();
   
   const now = new Date().toISOString();
-  const updateData: any = {
+  const updateData: Record<string, unknown> = {
     current_question_index: questionIndex,
     answers_revealed: false,
     question_start_time: now,
@@ -566,7 +568,7 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
 
   if (existing) {
     // Update existing answer
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
     if (answerIndex !== null) updateData.answer_index = answerIndex;
     if (textAnswer !== undefined) updateData.text_answer = textAnswer;
     if (wager !== undefined) updateData.wager = wager;
@@ -581,7 +583,7 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
   }
 
   // Insert new answer
-  const insertData: any = {
+  const insertData: Record<string, unknown> = {
     player_id: playerId,
     question_id: questionId,
   };
@@ -937,7 +939,7 @@ export async function resetGame(gameId: string) {
     .eq("game_id", gameId);
 
   if (questions && questions.length > 0) {
-    const questionIds = questions.map((q: any) => q.id);
+    const questionIds = questions.map((q) => q.id);
     // Delete all player answers for all questions in this game
     const { error: deleteError } = await supabase
       .from("player_answers")
@@ -1184,7 +1186,7 @@ export async function importQuestions(gameId: string, csvContent: string) {
         continue;
       }
       
-      const rowData: any = {};
+      const rowData: Record<string, string> = {};
       headers.forEach((header, index) => {
         const value = values[index] || "";
         // Remove surrounding quotes and trim whitespace
@@ -1261,8 +1263,10 @@ export async function importQuestions(gameId: string, csvContent: string) {
       }
       
       // Parse boolean fields (handle both "TRUE"/"FALSE" and "true"/"false")
-      const hasTimer = rowData.has_timer && rowData.has_timer.trim().toLowerCase() === "true";
-      const hasWager = rowData.has_wager && rowData.has_wager.trim().toLowerCase() === "true";
+      const hasTimerValue = rowData.has_timer?.trim().toLowerCase();
+      const hasTimer: boolean | undefined = hasTimerValue ? hasTimerValue === "true" : undefined;
+      const hasWagerValue = rowData.has_wager?.trim().toLowerCase();
+      const hasWager: boolean | undefined = hasWagerValue ? hasWagerValue === "true" : undefined;
       
       // Parse timer seconds (only if hasTimer is true and value is valid)
       let timerSeconds: number | undefined = undefined;
@@ -1283,7 +1287,7 @@ export async function importQuestions(gameId: string, csvContent: string) {
       }
       
       // Create question - addQuestion automatically handles ordering by appending to the end
-      const question = await addQuestion(gameId, {
+      const questionInput: QuestionInput = {
         text: rowData.question_text,
         choices,
         answer,
@@ -1291,16 +1295,25 @@ export async function importQuestions(gameId: string, csvContent: string) {
         multiplier: parseInt(rowData.multiplier) || 1,
         isFillInBlank,
         isTrueFalse,
-        hasTimer,
         timerSeconds,
         fillInBlankAnswer,
-        hasWager,
         maxWager,
-      });
+      };
+      
+      // Only include boolean fields if they are explicitly set
+      if (hasTimer !== undefined) {
+        questionInput.hasTimer = hasTimer;
+      }
+      if (hasWager !== undefined) {
+        questionInput.hasWager = hasWager;
+      }
+      
+      const question = await addQuestion(gameId, questionInput);
       
       results.push(question);
-    } catch (error: any) {
-      errors.push(`Row ${i + 2}: ${error.message || "Unknown error"}`);
+    } catch (error) {
+      const normalized = normalizeError(error);
+      errors.push(`Row ${i + 2}: ${normalized.message || "Unknown error"}`);
     }
   }
   

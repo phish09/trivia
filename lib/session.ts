@@ -1,3 +1,5 @@
+import { SESSION_EXPIRY_MS, STORAGE_KEYS } from "./constants";
+
 export interface GameSession {
   playerId: string;
   gameCode: string;
@@ -5,8 +7,7 @@ export interface GameSession {
   timestamp: number;
 }
 
-const SESSION_KEY = "trivia_game_session";
-const SESSION_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
+const SESSION_KEY = STORAGE_KEYS.SESSION;
 
 export function saveSession(session: GameSession) {
   try {
@@ -27,7 +28,7 @@ export function getSession(): GameSession | null {
     const session: GameSession = JSON.parse(stored);
     
     // Check if session is expired
-    if (Date.now() - session.timestamp > SESSION_EXPIRY) {
+    if (Date.now() - session.timestamp > SESSION_EXPIRY_MS) {
       clearSession();
       return null;
     }
@@ -53,7 +54,7 @@ export function clearSession() {
     // Also clear old playerId keys
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.startsWith("playerId_")) {
+      if (key && key.startsWith(STORAGE_KEYS.PLAYER_ID_PREFIX)) {
         localStorage.removeItem(key);
       }
     }
