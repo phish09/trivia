@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getGame, submitAnswer, verifyPlayerSession, leaveGame } from "../../actions";
 import { getSessionForGame, saveSession, clearSession } from "@/lib/session";
 import { getOrCreatePersistentPlayerId, getPlayerIdForGame, clearPlayerMapping } from "@/lib/cookies";
 import { getSupabaseClientForRealtime } from "@/lib/db";
+import { useTimer } from "@/hooks/useTimer";
 import Modal from "@/components/Modal";
 import RandomQuestionDisplay from "@/components/RandomQuestionDisplay";
 
@@ -21,8 +22,6 @@ function PlayPageContent() {
   const [submitted, setSubmitted] = useState(false);
   const [verifying, setVerifying] = useState(true);
   const [leaving, setLeaving] = useState(false);
-  const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const currentQuestionIdRef = useRef<string | null>(null);
   const previousQuestionIndexRef = useRef<number | null | undefined>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -46,6 +45,7 @@ function PlayPageContent() {
   const answerButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const questionHeadingRef = useRef<HTMLHeadingElement | null>(null);
   const statusAnnouncementRef = useRef<HTMLDivElement | null>(null);
+  const [screenReaderAnnouncement, setScreenReaderAnnouncement] = useState<string>("");
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout | null = null;
@@ -150,11 +150,7 @@ function PlayPageContent() {
       const newQuestionIndex = gameData.currentQuestionIndex;
       const questionChanged = previousQuestionIndex !== newQuestionIndex;
       
-      // Reset timer when question changes
-      if (questionChanged) {
-        setQuestionStartTime(null);
-        setTimeRemaining(null);
-      }
+      // Timer is now handled by useTimer hook
       
       setGame(gameData);
       
@@ -182,7 +178,15 @@ function PlayPageContent() {
             } else {
               setSelectedAnswer(playerAnswer.answerIndex);
             }
-            setSubmitted(true);
+            // Only set submitted to true if answers haven't been revealed yet
+            // When answers are revealed, we show the results view instead
+            if (!gameData.answersRevealed) {
+              setSubmitted(true);
+            } else {
+              setSubmitted(false);
+              // Clear any "Answer submitted" message when answers are revealed
+              setScreenReaderAnnouncement("");
+            }
           } else {
             // Player hasn't submitted yet (or answer was reset)
             // Only reset if question changed (to preserve selection during polling)
@@ -702,102 +706,8 @@ function PlayPageContent() {
     }
   }, [game?.gameEnded, soundEnabled]);
 
-  // Timer countdown logic for player side - using server-provided time
-  useEffect(() => {
-    if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined || game.answersRevealed) {
-      setTimeRemaining(null);
-      currentQuestionIdRef.current = null;
-      return;
-    }
-
-    const currentQuestion = game.questions?.[game.currentQuestionIndex];
-    if (!currentQuestion || !currentQuestion.hasTimer || submitted) {
-      setTimeRemaining(null);
-      currentQuestionIdRef.current = null;
-      return;
-    }
-
-    // Update question ref when question changes
-    if (currentQuestionIdRef.current !== currentQuestion.id) {
-      currentQuestionIdRef.current = currentQuestion.id;
-    }
-
-    // If we have questionStartTime and timer should be active, always initialize/sync
-    if (game.questionStartTime && currentQuestion.hasTimer && currentQuestion.timerSeconds) {
-      // ALWAYS use server-calculated time if available
-      if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
-        setTimeRemaining(game.timeRemaining);
-      } else {
-        // Calculate client-side from question_start_time
-        const startTimeStr = game.questionStartTime;
-        if (!startTimeStr) {
-          setTimeRemaining(null);
-          return;
-        }
-        
-        const startTime = new Date(startTimeStr).getTime();
-        if (isNaN(startTime)) {
-          console.error('[Timer] Invalid questionStartTime:', startTimeStr);
-          setTimeRemaining(null);
-          return;
-        }
-        
-        const now = Date.now();
-        const elapsed = Math.floor((now - startTime) / 1000);
-        const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
-        setTimeRemaining(remaining);
-      }
-    } else if (!game.questionStartTime) {
-      // No start time yet - wait for it to be set
-      setTimeRemaining(null);
-    } else {
-      // Question doesn't have timer - clear it
-      setTimeRemaining(null);
-    }
-  }, [game?.timeRemaining, game?.currentQuestionIndex, game?.answersRevealed, game?.questionStartTime, submitted]);
-
-  // Separate effect for countdown interval - only runs when timeRemaining is set
-  useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0) {
-      return;
-    }
-
-    // Sync with server more frequently (every 2 seconds) to keep in sync
-    const syncInterval = setInterval(() => {
-      if (game?.timeRemaining !== null && game?.timeRemaining !== undefined) {
-        // Always sync with server - it's the source of truth
-        setTimeRemaining(game.timeRemaining);
-      } else if (game?.questionStartTime && game?.questions?.[game.currentQuestionIndex]?.timerSeconds) {
-        // Fallback: recalculate from question_start_time
-        const currentQuestion = game.questions[game.currentQuestionIndex];
-        const startTimeStr = game.questionStartTime;
-        if (startTimeStr) {
-          const startTime = new Date(startTimeStr).getTime();
-          if (!isNaN(startTime)) {
-            const now = Date.now();
-            const elapsed = Math.floor((now - startTime) / 1000);
-            const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
-            setTimeRemaining(remaining);
-          }
-        }
-      }
-    }, 2000); // Sync every 2 seconds
-
-    // Countdown interval - decrement every second
-    const countdownInterval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev !== null && prev > 0) {
-          return prev - 1;
-        }
-        return prev;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(syncInterval);
-      clearInterval(countdownInterval);
-    };
-  }, [timeRemaining, game?.timeRemaining, game?.questionStartTime, game?.currentQuestionIndex]);
+  // Timer countdown logic using the useTimer hook
+  const timeRemaining = useTimer({ game, submitted });
 
   // Confetti effect for game over
   useEffect(() => {
@@ -952,12 +862,10 @@ function PlayPageContent() {
     setSelectedAnswer(answerIndex);
     
     // Announce selection to screen readers
-    if (statusAnnouncementRef.current) {
-      const answerText = currentQuestion?.isTrueFalse 
-        ? (answerIndex === 0 ? 'True' : 'False')
-        : currentQuestion?.choices?.[answerIndex] || `Option ${String.fromCharCode(65 + answerIndex)}`;
-      statusAnnouncementRef.current.textContent = `Selected: ${answerText}`;
-    }
+    const answerText = currentQuestion?.isTrueFalse 
+      ? (answerIndex === 0 ? 'True' : 'False')
+      : currentQuestion?.choices?.[answerIndex] || `Option ${String.fromCharCode(65 + answerIndex)}`;
+    setScreenReaderAnnouncement(`Selected: ${answerText}`);
   }
 
   // Keyboard navigation handler for answer options
@@ -1039,22 +947,72 @@ function PlayPageContent() {
     });
   }, [selectedAnswer, game?.currentQuestionIndex, submitted]);
 
-  // Announce timer expiration
+  // Announce timer expiration and update waiting message when timer hits zero
   useEffect(() => {
     if (!game || !statusAnnouncementRef.current) return;
     
     const currentQuestion = game.questions?.[game.currentQuestionIndex ?? -1];
+    
+    // If timer expired and player hasn't submitted, announce expiration
     if (currentQuestion?.hasTimer && timeRemaining === 0 && !submitted) {
-      statusAnnouncementRef.current.textContent = "Time expired. Answer submission disabled.";
+      setScreenReaderAnnouncement("Time expired. Answer submission disabled.");
     }
-  }, [timeRemaining, game?.currentQuestionIndex, submitted]);
+    
+    // If timer expired and player has submitted, update waiting message
+    if (currentQuestion?.hasTimer && timeRemaining === 0 && submitted && !game.answersRevealed) {
+      setScreenReaderAnnouncement(`Waiting for ${game?.hostName || 'host'} to reveal the answer...`);
+    }
+  }, [timeRemaining, game?.currentQuestionIndex, game?.hostName, submitted, game?.answersRevealed]);
 
-  // Announce when new question loads
-  useEffect(() => {
-    if (!game || !statusAnnouncementRef.current || submitted) return;
+  // Clear announcement when answers are revealed and reset submitted state
+  // Use useLayoutEffect to ensure it runs FIRST and clears everything synchronously before browser paint
+  // This MUST run before the "New question" effect to prevent text leakage
+  useLayoutEffect(() => {
+    if (!game) return;
+    
+    if (game.answersRevealed) {
+      // Reset submitted state when answers are revealed
+      setSubmitted(false);
+      
+      // Clear announcement text and set appropriate message when answers are revealed
+      const currentQuestion = game.questions?.[game.currentQuestionIndex ?? -1];
+      const playerAnswer = game.playerAnswers?.find(
+        (pa: any) => pa.playerId === playerId && pa.questionId === currentQuestion?.id
+      );
+      
+      // Set the appropriate message
+      if (playerAnswer) {
+        const isCorrect = playerAnswer.isCorrect === true;
+        const pointsEarned = playerAnswer.pointsEarned || 0;
+        setScreenReaderAnnouncement(isCorrect 
+          ? `Correct! You earned ${pointsEarned} points.`
+          : `Incorrect. You earned ${pointsEarned} points.`);
+      } else {
+        setScreenReaderAnnouncement("Answers revealed. You didn't submit an answer for this question.");
+      }
+    }
+    // When answers are not revealed, don't touch the announcement here
+    // Let the "New question" effect handle it
+  }, [game, game?.answersRevealed, playerId]);
+
+  // Announce when new question loads (only when answers are not revealed)
+  // Use useLayoutEffect to ensure it runs synchronously
+  // This runs AFTER the "answers revealed" effect to ensure proper priority
+  useLayoutEffect(() => {
+    if (!game || !statusAnnouncementRef.current) return;
+    
+    // CRITICAL: NEVER set "New question" announcement if answers are revealed
+    // Check this FIRST before doing anything else - this is the most important check
+    if (game.answersRevealed === true) {
+      // Do nothing - let the "answers revealed" effect handle the announcement
+      return;
+    }
+    
+    // Don't announce if already submitted
+    if (submitted) return;
     
     const currentQuestion = game.questions?.[game.currentQuestionIndex ?? -1];
-    if (currentQuestion) {
+    if (currentQuestion && !game.answersRevealed) {
       const questionType = currentQuestion.isTrueFalse 
         ? "True or False" 
         : currentQuestion.isFillInBlank 
@@ -1064,9 +1022,10 @@ function PlayPageContent() {
       const timerText = currentQuestion.hasTimer 
         ? ` with ${currentQuestion.timerSeconds || 30} second timer` 
         : '';
-      statusAnnouncementRef.current.textContent = `New question: ${questionType}, ${pointsText}${timerText}. Use arrow keys to navigate options, Space or Enter to select.`;
+      // Set the announcement using React state
+      setScreenReaderAnnouncement(`New question: ${questionType}, ${pointsText}${timerText}. Use arrow keys to navigate options, Space or Enter to select.`);
     }
-  }, [game?.currentQuestionIndex, submitted]);
+  }, [game, game?.answersRevealed, submitted]);
 
   // Debounced handler for text answer input
   function handleTextAnswerChange(value: string) {
@@ -1139,9 +1098,15 @@ function PlayPageContent() {
       }
       setSubmitted(true);
       
-      // Announce submission to screen readers
-      if (statusAnnouncementRef.current) {
-        statusAnnouncementRef.current.textContent = "Answer submitted. Waiting for other players.";
+      // Announce submission to screen readers (only if answers aren't revealed yet)
+      if (!game?.answersRevealed) {
+        // Check if timer has expired
+        const timerExpired = currentQuestion.hasTimer && timeRemaining === 0;
+        if (timerExpired) {
+          setScreenReaderAnnouncement(`Waiting for ${game?.hostName || 'host'} to reveal the answer...`);
+        } else {
+          setScreenReaderAnnouncement("Answer submitted. Waiting for other players.");
+        }
       }
       
       // Refresh game state after submitting answer
@@ -1629,7 +1594,7 @@ function PlayPageContent() {
             <p className="text-lg text-slate-600 mb-6">Waiting for {game?.hostName || 'host'} to start the game...</p>
             <div className="flex justify-center gap-3">
               <button
-                className="border border-b-4 border-slate-800 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
+                className="border border-b-4 border-slate-900 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
                 onClick={loadGame}
                 title="Refresh game data"
               >
@@ -1708,7 +1673,7 @@ function PlayPageContent() {
               )}
             </button>
             <button
-              className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              className="px-4 py-2 border border-b-4 border-gray-900 bg-gray-600 text-white rounded hover:bg-gray-700"
               onClick={loadGame}
               title="Refresh game data"
             >
@@ -1753,7 +1718,7 @@ function PlayPageContent() {
   const sortedPlayers = [...game.players].sort((a: any, b: any) => (b.score || 0) - (a.score || 0));
 
   // Answers revealed - show results and scoreboard
-  if (game.answersRevealed) {
+  if (game && game.answersRevealed) {
     // For fill-in-the-blank questions, isCorrect should be explicitly set by the host
     // If it's null/undefined, default to false (not scored yet)
     const isCorrect = playerAnswer?.isCorrect === true; // Explicitly check for true, not just truthy
@@ -1827,33 +1792,50 @@ function PlayPageContent() {
             {playerAnswer ? (
               <div className={`mb-6 p-6 rounded-xl border-2 ${
                 isCorrect 
-                  ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-300" 
-                  : "bg-gradient-to-r from-red-50 to-pink-50 border-red-300"
+                  ? "bg-gradient-to-r from-green-50 to-emerald-50 border-green-700 border-b-6" 
+                  : "bg-gradient-to-r from-red-50 to-pink-50 border-red-700 border-b-6"
               }`}>
-                <div className="flex items-center gap-3 mb-4">
-                  {isCorrect ? (
-                    <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    {isCorrect ? (
+                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                        </svg>
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </div>
+                    )}
+                    <div>
+                      <p className={`text-xl font-bold ${isCorrect ? "text-gray-900" : "text-red-700"}`}>
+                        {isCorrect ? "Correct!" : "Incorrect"}
+                      </p>
+                      <div>
+                        <p className="text-gray-700 font-semibold flex items-center gap-1">
+                          <span className="uppercase text-xs tracking-wider">Correct answer:</span>{" "}
+                          <span className="font-bold text-slate-900">
+                            {currentQuestion.isTrueFalse 
+                                ? (currentQuestion.answer === 0 ? "True" : "False")
+                                : currentQuestion.isFillInBlank
+                                ? (currentQuestion.fillInBlankAnswer || "N/A")
+                                : currentQuestion.choices[currentQuestion.answer]
+                            }
+                          </span>
+                        </p>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center">
-                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </div>
-                  )}
-                  <div>
-                    <p className={`text-xl ${isCorrect ? "text-green-700" : "text-red-700"}`}>
-                      {isCorrect ? "Correct!" : "Incorrect"}
-                    </p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
                     {currentQuestion.hasWager && playerAnswer?.wager && playerAnswer.wager > 0 ? (
                       <p className={`font-bold text-lg ${isCorrect ? "text-green-700" : "text-red-700"}`}>
                         {isCorrect ? `+${pointsEarned}` : pointsEarned} points {isCorrect ? "(wagered)" : "(lost wager)"}
                       </p>
                     ) : pointsEarned > 0 ? (
-                      <p className="text-tertiary font-bold text-lg">
+                      <p className="text-green-700 font-bold text-lg">
                         +{pointsEarned} points
                       </p>
                     ) : pointsEarned < 0 ? (
@@ -1863,19 +1845,6 @@ function PlayPageContent() {
                     ) : null}
                   </div>
                 </div>
-                <div>
-                  <p className="text-green-800 font-semibold">
-                    <span className="uppercase text-xs tracking-wider">Correct answer:</span>{" "}
-                    <span className="font-bold text-slate-700">
-                      {currentQuestion.isTrueFalse 
-                          ? (currentQuestion.answer === 0 ? "True" : "False")
-                          : currentQuestion.isFillInBlank
-                          ? (currentQuestion.fillInBlankAnswer || "N/A")
-                          : currentQuestion.choices[currentQuestion.answer]
-                      }
-                    </span>
-                  </p>
-                </div>
               </div>
             ) : (
               <div className="mb-6 p-6 bg-slate-50 rounded-xl border-2 border-slate-200">
@@ -1883,11 +1852,11 @@ function PlayPageContent() {
               </div>
             )}
 
-            <div className="space-y-3 mb-6">
+            <div className="space-y-3 mb-6 pt-6 border-t border-slate-300">
               {currentQuestion.choices.map((choice: string, idx: number) => (
                 <div
                   key={idx}
-                  className={`p-6 border-2 rounded-xl ${
+                  className={`p-6 border-2 ${currentQuestion.isTrueFalse ? 'rounded-xl' : 'rounded-full'} ${
                     idx === currentQuestion.answer
                       ? "bg-green-100 border-green-400"
                       : idx === playerAnswer?.answerIndex
@@ -2016,7 +1985,7 @@ function PlayPageContent() {
           {/* Action Buttons */}
           <div className="flex justify-center gap-3">
             <button
-              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
+              className="border border-b-4 border-slate-900 px-4 py-2 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm"
               onClick={loadGame}
               title="Refresh game data"
             >
@@ -2132,7 +2101,7 @@ function PlayPageContent() {
                 )}
               </div>
             </div>
-            {currentQuestion.hasTimer && timeRemaining !== null && timeRemaining > 0 && !submitted && !game.answersRevealed && (
+            {currentQuestion.hasTimer && timeRemaining !== null && timeRemaining > 0 && !game.answersRevealed && (
               <div className="mb-4 flex items-center justify-center gap-2 p-3 rounded-xl">
                 <svg className={`w-6 h-6 text-orange-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2162,13 +2131,27 @@ function PlayPageContent() {
           </div>
 
           {/* Screen reader announcements */}
+          {/* Use React state instead of direct DOM manipulation to prevent text leakage */}
           <div
             ref={statusAnnouncementRef}
             role="status"
             aria-live="polite"
             aria-atomic="true"
             className="sr-only"
-          />
+            style={{
+              position: 'absolute',
+              width: '1px',
+              height: '1px',
+              padding: 0,
+              margin: '-1px',
+              overflow: 'hidden',
+              clip: 'rect(0, 0, 0, 0)',
+              whiteSpace: 'nowrap',
+              borderWidth: 0,
+            }}
+          >
+            {screenReaderAnnouncement}
+          </div>
 
           {currentQuestion.isFillInBlank ? (
             <div className="space-y-4 mb-6">
@@ -2379,20 +2362,22 @@ function PlayPageContent() {
             </div>
           )}
 
-          {submitted ? (
+          {submitted && game && game.answersRevealed !== true ? (
             <div className="bg-primary/10 rounded-full p-6 text-center">
-              <p className="text-red-600 font-semibold flex flex-col items-center justify-center gap-1 text-base leading-tight">
-                Answer submitted.<br /><span className="text-sm text-slate-700">Waiting for other players...</span>
+              <p className="text-emerald-700 font-semibold text-base">
+                {currentQuestion.hasTimer && timeRemaining === 0
+                  ? `Waiting for ${game?.hostName || 'host'} to reveal the answer...`
+                  : 'Answer submitted. Waiting for other players...'}
               </p>
             </div>
-          ) : (
+          ) : !submitted ? (
             <button
               aria-label="Submit answer"
               aria-disabled={
                 (currentQuestion.hasTimer && timeRemaining === 0) ||
                 (currentQuestion.isFillInBlank ? !(textAnswerDisplay.trim() || textAnswer.trim()) : selectedAnswer === null)
               }
-              className={`border border-b-4 border-emerald-900 w-full px-6 py-4 rounded-full font-bold text-lg shadow-lg transition-all disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+              className={`border border-b-4 border-emerald-900 w-full px-6 py-4 rounded-full font-bold text-lg transition-all disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
                 currentQuestion.hasTimer && timeRemaining === 0
                   ? 'bg-red-100 text-red-600 border-2 border-b-4 border-red-200'
                   : 'bg-emerald-600 text-white border-b-4 border-emerald-600 hover:shadow-xl hover:scale-[1.02] transform disabled:opacity-50'
@@ -2405,7 +2390,7 @@ function PlayPageContent() {
             >
               {currentQuestion.hasTimer && timeRemaining === 0 ? 'Ran out of time' : 'Submit answer'}
             </button>
-          )}
+          ) : null}
         </div>
 
         {/* Scoreboard */}

@@ -425,10 +425,23 @@ export async function getGame(code: string) {
   }
 
   // Get player answers and scores
-  const { data: playerAnswers } = await supabase
-    .from("player_answers")
-    .select("*")
-    .in("player_id", (game.players || []).map((p: any) => p.id));
+  // Explicitly select text_answer to ensure fill-in-the-blank answers are included
+  // Get ALL answers for players in this game (not filtered by question, so we get answers for all questions)
+  const playerIds = (game.players || []).map((p: any) => p.id);
+  let playerAnswers = null;
+  if (playerIds.length > 0) {
+    const { data, error } = await supabase
+      .from("player_answers")
+      .select("id, player_id, question_id, answer_index, text_answer, is_correct, points_earned, manually_scored, wager, created_at")
+      .in("player_id", playerIds)
+      .order("created_at", { ascending: false });
+    
+    if (error) {
+      console.error("Error fetching player answers:", error);
+    } else {
+      playerAnswers = data;
+    }
+  }
 
   // Get updated player scores
   const { data: playersWithScores } = await supabase

@@ -1,29 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useParams } from "next/navigation";
 import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, deleteQuestion, exportQuestions, importQuestions } from "../../actions";
 import { useRouter } from "next/navigation";
-import { getSupabaseClientForRealtime } from "@/lib/db";
+import { useConfetti } from "@/hooks/useConfetti";
+import { useTimer } from "@/hooks/useTimer";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import Modal from "@/components/Modal";
+import QuestionForm from "@/components/QuestionForm";
+import type { QuestionInput } from "@/types/game";
 
 function HostGameContent() {
   const params = useParams();
   const router = useRouter();
   const code = params.code as string;
   const [game, setGame] = useState<any>(null);
-  const [questionText, setQuestionText] = useState("");
-  const [choices, setChoices] = useState(["", "", "", ""]);
-  const [answer, setAnswer] = useState(0);
-  const [points, setPoints] = useState(10);
-  const [multiplier, setMultiplier] = useState(1);
-  const [isFillInBlank, setIsFillInBlank] = useState(false);
-  const [isTrueFalse, setIsTrueFalse] = useState(false);
-  const [hasTimer, setHasTimer] = useState(false);
-  const [timerSeconds, setTimerSeconds] = useState<number | string>(30);
-  const [fillInBlankAnswer, setFillInBlankAnswer] = useState("");
-  const [hasWager, setHasWager] = useState(false);
-  const [maxWager, setMaxWager] = useState(10);
   const [ending, setEnding] = useState(false);
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
   const [editQuestionText, setEditQuestionText] = useState("");
@@ -40,14 +32,7 @@ function HostGameContent() {
   const [editMaxWager, setEditMaxWager] = useState(10);
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [questionStartTime, setQuestionStartTime] = useState<number | null>(null);
-  const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
-  const currentQuestionIdRef = useRef<string | null>(null);
-  const previousQuestionStartTimeRef = useRef<string | null>(null);
-  const timerInitializedRef = useRef<boolean>(false);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const confettiAnimationRef = useRef<number | null>(null);
-  const confettiTriggeredRef = useRef<boolean>(false);
   const previousGameEndedRef = useRef<boolean>(false);
   const [passwordPrompt, setPasswordPrompt] = useState(false);
   const [isRevealing, setIsRevealing] = useState(false);
@@ -167,382 +152,41 @@ function HostGameContent() {
     }
   }
 
-  // Set up Supabase Realtime subscription for instant updates
-  useEffect(() => {
-    if (!game?.id) return;
-
-    const supabase = getSupabaseClientForRealtime();
-    
-    // Subscribe to changes in the games table for this specific game
-    const channel = supabase
-      .channel(`game-${game.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'games',
-          filter: `id=eq.${game.id}`,
-        },
-        (payload) => {
-          // Game state changed, reload game data
-          loadGame();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'player_answers',
-          filter: game.questions && game.questions.length > 0 
-            ? `question_id=in.(${game.questions.map((q: any) => q.id).join(',')})`
-            : undefined,
-        },
-        () => {
-          // Player answers changed, reload game data
-          loadGame();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'players',
-          filter: `game_id=eq.${game.id}`,
-        },
-        () => {
-          // Players changed (joined/left), reload game data
-          loadGame();
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime subscription active');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.warn('⚠️ Realtime subscription error, falling back to polling');
-        }
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [game?.id]);
-
-  // Poll for updates when there's an active question waiting for players to answer (fallback if realtime fails)
-  useEffect(() => {
-    if (!game) return;
-
-    const hasActiveQuestion = game.currentQuestionIndex !== null && game.currentQuestionIndex !== undefined;
-    
-    // Poll when there's an active question and answers haven't been revealed yet
-    // This allows host to see when players submit answers (fallback if realtime fails)
-    const shouldPoll = hasActiveQuestion && !game.answersRevealed;
-
-    if (shouldPoll) {
-      // Poll every 3 seconds to check for new player answers (fallback)
-      const interval = setInterval(loadGame, 3000);
-      return () => clearInterval(interval);
-    }
-  }, [game]);
-
-  // Timer countdown logic - using server-provided time
-  useEffect(() => {
-    if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) {
-      setTimeRemaining(null);
-      currentQuestionIdRef.current = null;
-      previousQuestionStartTimeRef.current = null;
-      timerInitializedRef.current = false;
-      return;
-    }
-
-    const currentQuestion = game.questions?.[game.currentQuestionIndex];
-    if (!currentQuestion || !currentQuestion.hasTimer || game.answersRevealed) {
-      setTimeRemaining(null);
-      currentQuestionIdRef.current = null;
-      previousQuestionStartTimeRef.current = null;
-      timerInitializedRef.current = false;
-      return;
-    }
-
-    // Check if question changed
-    const questionChanged = currentQuestionIdRef.current !== currentQuestion.id;
-    // Check if questionStartTime changed (question was reactivated)
-    // Compare with previous value BEFORE updating the ref
-    const startTimeChanged = game.questionStartTime !== previousQuestionStartTimeRef.current;
-    
-    // Update refs AFTER checking for changes
-    if (questionChanged) {
-      currentQuestionIdRef.current = currentQuestion.id;
-      timerInitializedRef.current = false; // Reset initialization flag when question changes
-      // Reset previous start time when question changes so we detect when new question gets start time
-      previousQuestionStartTimeRef.current = null;
-    }
-    
-    // If we have questionStartTime and timer should be active, always initialize/sync
-    if (game.questionStartTime && currentQuestion.hasTimer && currentQuestion.timerSeconds) {
-      // Always initialize if question changed, start time changed, or not yet initialized
-      // This ensures timer starts even if refs aren't tracking properly
-      if (questionChanged || startTimeChanged || !timerInitializedRef.current) {
-        timerInitializedRef.current = true;
-        
-        // ALWAYS calculate and set timeRemaining when we have questionStartTime
-        // Use server-calculated time if available, otherwise calculate client-side
-        if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
-          setTimeRemaining(game.timeRemaining);
-        } else {
-          // Calculate client-side from question_start_time
-          // Ensure questionStartTime is a valid date string
-          const startTimeStr = game.questionStartTime;
-          if (!startTimeStr) {
-            setTimeRemaining(null);
-            return;
-          }
-          
-          const startTime = new Date(startTimeStr).getTime();
-          if (isNaN(startTime)) {
-            console.error('[Timer] Invalid questionStartTime:', startTimeStr);
-            setTimeRemaining(null);
-            return;
-          }
-          
-          const now = Date.now();
-          const elapsed = Math.floor((now - startTime) / 1000);
-          const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
-          setTimeRemaining(remaining);
-        }
-      } else {
-        // Question hasn't changed but sync with server time if available
-        if (game.timeRemaining !== null && game.timeRemaining !== undefined) {
-          setTimeRemaining(game.timeRemaining);
-        }
-      }
-      
-      // Update the ref AFTER initializing to track that we've processed this start time
-      previousQuestionStartTimeRef.current = game.questionStartTime;
-    } else if (!game.questionStartTime) {
-      // No start time yet - wait for it to be set
-      setTimeRemaining(null);
-      timerInitializedRef.current = false;
-      // Update ref to track that we've seen null
-      previousQuestionStartTimeRef.current = null;
-    } else {
-      // Question doesn't have timer - clear it
-      setTimeRemaining(null);
-      timerInitializedRef.current = false;
-      previousQuestionStartTimeRef.current = null;
-    }
-  }, [game?.timeRemaining, game?.currentQuestionIndex, game?.answersRevealed, game?.questionStartTime]);
-
-  // Separate effect for countdown interval - only runs when timeRemaining is set
-  useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0) {
-      return;
-    }
-
-    // Sync with server more frequently (every 2 seconds) to keep in sync
-    const syncInterval = setInterval(() => {
-      if (game?.timeRemaining !== null && game?.timeRemaining !== undefined) {
-        // Always sync with server - it's the source of truth
-        setTimeRemaining(game.timeRemaining);
-      } else if (game?.questionStartTime && game?.questions?.[game.currentQuestionIndex]?.hasTimer && game?.questions?.[game.currentQuestionIndex]?.timerSeconds) {
-        // Fallback: recalculate from question_start_time
-        const currentQuestion = game.questions[game.currentQuestionIndex];
-        const startTimeStr = game.questionStartTime;
-        if (startTimeStr) {
-          const startTime = new Date(startTimeStr).getTime();
-          if (!isNaN(startTime)) {
-            const now = Date.now();
-            const elapsed = Math.floor((now - startTime) / 1000);
-            const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
-            setTimeRemaining(remaining);
-          }
-        }
-      }
-    }, 2000); // Sync every 2 seconds
-
-    // Countdown interval - decrement every second
-    const countdownInterval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev !== null && prev > 0) {
-          return prev - 1;
-        }
-        return prev;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(syncInterval);
-      clearInterval(countdownInterval);
-    };
-  }, [timeRemaining, game?.timeRemaining, game?.questionStartTime, game?.currentQuestionIndex]);
-
-  // Confetti effect for game over
-  useEffect(() => {
-    const isGameEnded = game?.gameEnded || false;
-    
-    // Check if game just transitioned from not-ended to ended
-    const justEnded = isGameEnded && !previousGameEndedRef.current;
-    
-    // Update previous state
-    previousGameEndedRef.current = isGameEnded;
-    
-    // Only trigger confetti when game just ended
-    if (!justEnded) return;
-
-    const canvasElement = confettiCanvasRef.current;
-    if (!canvasElement) return;
-
-    const ctx = canvasElement.getContext('2d');
-    if (!ctx) return;
-
-    const resizeCanvas = () => {
-      if (canvasElement) {
-        canvasElement.width = window.innerWidth;
-        canvasElement.height = window.innerHeight;
-      }
-    };
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F', '#BB8FCE'];
-    const confetti: Array<{
-      x: number;
-      y: number;
-      r: number;
-      d: number;
-      color: string;
-      tilt: number;
-      tiltAngleIncrement: number;
-      tiltAngle: number;
-    }> = [];
-
-    const confettiCount = 150;
-
-    for (let i = 0; i < confettiCount; i++) {
-      confetti.push({
-        x: Math.random() * canvasElement.width,
-        y: Math.random() * canvasElement.height - canvasElement.height,
-        r: Math.random() * 6 + 4,
-        d: Math.random() * confettiCount,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        tilt: Math.floor(Math.random() * 10) - 10,
-        tiltAngleIncrement: Math.random() * 0.07 + 0.05,
-        tiltAngle: Math.random() * Math.PI,
-      });
-    }
-
-    let animationFrame: number;
-    const startTime = Date.now();
-    const confettiCreationDuration = 5000; // Stop creating new confetti after 5 seconds
-    const maxAnimationDuration = 15000; // Maximum animation duration (15 seconds to let all fall)
-
-    function draw() {
-      if (!ctx || !canvasElement) return;
-      
-      const currentTime = Date.now();
-      const elapsed = currentTime - startTime;
-      const stopCreatingNew = elapsed >= confettiCreationDuration;
-
-      ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-      let activeCount = 0;
-
-      confetti.forEach((conf) => {
-        // Check if confetti is still on screen
-        const isOnScreen = conf.y <= canvasElement.height + conf.r && conf.x >= -conf.r && conf.x <= canvasElement.width + conf.r;
-        
-        if (isOnScreen) {
-          activeCount++;
-          
-          ctx.beginPath();
-          ctx.lineWidth = conf.r / 2;
-          ctx.strokeStyle = conf.color;
-          ctx.moveTo(conf.x + conf.tilt + conf.r, conf.y);
-          ctx.lineTo(conf.x + conf.tilt, conf.y + conf.tilt + conf.r);
-          ctx.stroke();
-
-          conf.y += (Math.cos(conf.d) + 3 + conf.r / 2) / 2;
-          conf.tiltAngle += conf.tiltAngleIncrement;
-          conf.x += Math.sin(conf.d) * 2;
-          conf.tilt = Math.sin(conf.tiltAngle - conf.r / 2) * 15;
-        }
-
-        // Only reset confetti if we're still in the creation phase and it's off screen
-        if (!stopCreatingNew && !isOnScreen) {
-          if (conf.y > canvasElement.height) {
-            conf.x = Math.random() * canvasElement.width;
-            conf.y = -conf.r;
-            conf.tilt = Math.floor(Math.random() * 10) - 10;
-            activeCount++;
-          } else if (conf.x < -conf.r || conf.x > canvasElement.width + conf.r) {
-            conf.x = Math.random() * canvasElement.width;
-            conf.y = -conf.r;
-            activeCount++;
-          }
-        }
-      });
-
-      // Continue animation until max duration or all confetti has fallen
-      if (elapsed < maxAnimationDuration && activeCount > 0) {
-        animationFrame = requestAnimationFrame(draw);
-      } else {
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      }
-    }
-
-    // Start animation after a short delay
-    setTimeout(() => {
-      draw();
-    }, 100);
-
-    return () => {
-      window.removeEventListener('resize', resizeCanvas);
-      if (animationFrame) {
-        cancelAnimationFrame(animationFrame);
-      }
-    };
-  }, [game?.gameEnded]);
-
-  async function loadGame() {
+  const loadGame = useCallback(async () => {
     try {
       const gameData = await getGame(code);
       setGame(gameData);
     } catch (error) {
       console.error("Failed to load game:", error);
     }
-  }
+  }, [code]);
 
-  async function handleAddQuestion() {
-    if (!questionText || !game) return;
-    if (!isFillInBlank && !isTrueFalse && choices.some((c) => !c)) return;
-    await addQuestion(game.id, {
-      text: questionText,
-      choices: isFillInBlank ? [] : isTrueFalse ? ["True", "False"] : choices.filter((c) => c),
-      answer: isFillInBlank ? -1 : isTrueFalse ? answer : answer,
-      points,
-      multiplier,
-      isFillInBlank,
-      isTrueFalse,
-      hasTimer,
-      timerSeconds: hasTimer ? (Number(timerSeconds) || 30) : undefined,
-      fillInBlankAnswer: isFillInBlank ? fillInBlankAnswer : undefined,
-      hasWager,
-      maxWager: hasWager ? maxWager : undefined,
-    });
-    setQuestionText("");
-    setChoices(["", "", "", ""]);
-    setAnswer(0);
-    setPoints(10);
-    setMultiplier(1);
-    setIsFillInBlank(false);
-    setIsTrueFalse(false);
-    setHasTimer(false);
-    setTimerSeconds(30);
-    setFillInBlankAnswer("");
-    setHasWager(false);
-    setMaxWager(10);
+  // Set up Supabase Realtime subscription for instant updates
+  useRealtimeSubscription({
+    game,
+    onGameUpdate: loadGame,
+    enablePolling: true,
+  });
+
+  // Timer countdown logic - using server-provided time
+  const timeRemaining = useTimer({
+    game,
+    submitted: false,
+  });
+
+  // Confetti effect for game over
+  const isGameEnded = game?.gameEnded || false;
+  const justEnded = isGameEnded && !previousGameEndedRef.current;
+  useConfetti(justEnded, confettiCanvasRef);
+  
+  // Track previous game ended state for confetti trigger
+  useEffect(() => {
+    previousGameEndedRef.current = isGameEnded;
+  }, [isGameEnded]);
+
+  async function handleAddQuestion(question: QuestionInput) {
+    if (!game) return;
+    await addQuestion(game.id, question);
     loadGame();
   }
 
@@ -1701,259 +1345,11 @@ function HostGameContent() {
         )}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-tertiary to-fourth rounded-lg">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </div>
-            <h2 className="text-2xl font-bold text-slate-800">Add question</h2>
-          </div>
-          <button
-            onClick={() => toggleSection('addQuestion')}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            title={minimizedSections.addQuestion ? "Expand" : "Minimize"}
-          >
-            <svg className={`w-5 h-5 text-slate-600 transition-transform ${minimizedSections.addQuestion ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
-        </div>
-        {!minimizedSections.addQuestion && (
-          <>
-        <div className="space-y-5 mt-6">
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Question type</label>
-            <div className="flex flex-wrap gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={!isFillInBlank && !isTrueFalse}
-                  onChange={() => {
-                    setIsFillInBlank(false);
-                    setIsTrueFalse(false);
-                  }}
-                  className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                />
-                <span className="font-medium">Multiple choice</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={isTrueFalse}
-                  onChange={() => {
-                    setIsTrueFalse(true);
-                    setIsFillInBlank(false);
-                    setAnswer(0); // Default to True
-                  }}
-                  className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                />
-                <span className="font-medium">True or false</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  checked={isFillInBlank}
-                  onChange={() => {
-                    setIsFillInBlank(true);
-                    setIsTrueFalse(false);
-                  }}
-                  className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                />
-                <span className="font-medium">Fill in the blank</span>
-              </label>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Question text</label>
-            <input
-              className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-              placeholder={isFillInBlank ? "Enter your fill in the blank question" : "Enter your question"}
-              value={questionText}
-              onChange={(e) => setQuestionText(e.target.value)}
-            />
-          </div>
-          {isFillInBlank && (
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Correct answer</label>
-              <input
-                className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-                placeholder="Enter the correct answer"
-                value={fillInBlankAnswer}
-                onChange={(e) => setFillInBlankAnswer(e.target.value)}
-              />
-            </div>
-          )}
-          {!isFillInBlank && !isTrueFalse && (
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Answer choices</label>
-              <div className="space-y-3">
-                {choices.map((choice, idx) => (
-                  <div key={idx} className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      checked={answer === idx}
-                      onChange={() => setAnswer(idx)}
-                      className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                    />
-                    <input
-                      className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-                      placeholder={`Choice ${idx + 1}`}
-                      value={choice}
-                      onChange={(e) => {
-                        const newChoices = [...choices];
-                        newChoices[idx] = e.target.value;
-                        setChoices(newChoices);
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {isTrueFalse && (
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Correct answer</label>
-              <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={answer === 0}
-                    onChange={() => setAnswer(0)}
-                    className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="font-medium text-lg">True</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={answer === 1}
-                    onChange={() => setAnswer(1)}
-                    className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                  />
-                  <span className="font-medium text-lg">False</span>
-                </label>
-              </div>
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-4">
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Points</label>
-              <input
-                type="number"
-                className="w-24 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-                value={points}
-                onChange={(e) => setPoints(Number(e.target.value))}
-                min="1"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Multiplier</label>
-              <select
-                className="px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all bg-white"
-                value={multiplier}
-                onChange={(e) => setMultiplier(Number(e.target.value))}
-              >
-                <option value={1}>1x</option>
-                <option value={2}>2x</option>
-                <option value={3}>3x</option>
-                <option value={4}>4x</option>
-              </select>
-            </div>
-          </div>
-          <div className="border-t-2 border-slate-200 pt-4 mt-4">
-            <div className="flex items-center gap-3 mb-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hasTimer}
-                  onChange={(e) => setHasTimer(e.target.checked)}
-                  className="w-5 h-5 border-2 border-slate-300 rounded focus:ring-2 focus:ring-primary"
-                />
-                <span className="text-sm font-semibold text-slate-700">Enable timer</span>
-              </label>
-            </div>
-            {hasTimer && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Timer duration (seconds)</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="999"
-                  maxLength={3}
-                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-                  placeholder="e.g., 15 for 15 seconds, 120 for 2 minutes"
-                  value={timerSeconds === '' ? '' : timerSeconds}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value === '') {
-                      setTimerSeconds(''); // Allow empty temporarily
-                    } else if (value.length <= 3) {
-                      const num = Number(value);
-                      if (!isNaN(num) && num >= 1 && num <= 999) {
-                        setTimerSeconds(num);
-                      }
-                    }
-                  }}
-                  onBlur={(e) => {
-                    if (timerSeconds === '' || timerSeconds === 0) {
-                      setTimerSeconds(30); // Default to 30 if empty on blur
-                    }
-                  }}
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  {Number(timerSeconds) || 30} second{(Number(timerSeconds) || 30) !== 1 ? 's' : ''} ({Math.floor((Number(timerSeconds) || 30) / 60)}m {(Number(timerSeconds) || 30) % 60}s)
-                </p>
-              </div>
-            )}
-          </div>
-          <div className="border-t-2 border-slate-200 pt-4 mt-4">
-            <div className="flex items-center gap-3 mb-3">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={hasWager}
-                  onChange={(e) => setHasWager(e.target.checked)}
-                  className="w-5 h-5 border-2 border-slate-300 rounded focus:ring-2 focus:ring-primary"
-                />
-                <span className="text-sm font-semibold text-slate-700">Enable wagering</span>
-              </label>
-            </div>
-            {hasWager && (
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Maximum wager (points)</label>
-                <input
-                  type="number"
-                  min="1"
-                  className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-                  placeholder="Maximum points players can wager"
-                  value={maxWager}
-                  onChange={(e) => setMaxWager(Number(e.target.value) || 10)}
-                />
-                <p className="text-xs text-slate-500 mt-1">
-                  Players can wager up to {maxWager} points. If correct, they gain the wager. If wrong, they lose it.
-                </p>
-              </div>
-            )}
-          </div>
-          <div className="flex justify-end mt-4">
-            <button
-              className="border border-b-4 border-secondary px-6 py-3 bg-tertiary text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
-              onClick={handleAddQuestion}
-              disabled={!questionText || (!isFillInBlank && !isTrueFalse && choices.some((c) => !c))}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Add question
-            </button>
-          </div>
-        </div>
-          </>
-        )}
-      </div>
+      <QuestionForm
+        onSubmit={handleAddQuestion}
+        minimized={minimizedSections.addQuestion}
+        onToggleMinimize={() => toggleSection('addQuestion')}
+      />
 
       <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
