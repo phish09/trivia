@@ -9,6 +9,9 @@ import { useTimer } from "@/hooks/useTimer";
 import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 import Modal from "@/components/Modal";
 import QuestionForm from "@/components/QuestionForm";
+import QuestionList from "@/components/QuestionList";
+import PlayerManagement from "@/components/PlayerManagement";
+import GameControls from "@/components/GameControls";
 import type { QuestionInput } from "@/types/game";
 
 function HostGameContent() {
@@ -49,44 +52,20 @@ function HostGameContent() {
     questions: false,
   });
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | 'delete' | null>(null);
+  const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | 'delete' | 'kick' | null>(null);
   const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
+  const [playerToKick, setPlayerToKick] = useState<{id: string, username: string} | null>(null);
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{success: boolean, message: string} | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [showQuestionDropdown, setShowQuestionDropdown] = useState(false);
-  const questionDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     checkPassword();
   }, [code]);
 
-  // Close dropdown when clicking outside or pressing Escape
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (questionDropdownRef.current && !questionDropdownRef.current.contains(event.target as Node)) {
-        setShowQuestionDropdown(false);
-      }
-    };
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && showQuestionDropdown) {
-        setShowQuestionDropdown(false);
-      }
-    };
-
-    if (showQuestionDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleEscape);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        document.removeEventListener('keydown', handleEscape);
-      };
-    }
-  }, [showQuestionDropdown]);
 
   async function checkPassword() {
     // Check if password is stored in sessionStorage
@@ -535,18 +514,28 @@ function HostGameContent() {
     }
   }
 
-  async function handleKickPlayer(playerId: string, username: string) {
+  function handleKickPlayerClick(playerId: string, username: string) {
     if (!game) return;
-    
-    const confirmed = window.confirm(`Are you sure you want to kick ${username}? They will be removed from the game.`);
-    if (!confirmed) return;
+    setPlayerToKick({ id: playerId, username });
+    setConfirmModalType('kick');
+    setShowConfirmModal(true);
+  }
+
+  async function handleKickPlayer() {
+    if (!playerToKick || !game) return;
 
     try {
-      await kickPlayer(playerId);
+      await kickPlayer(playerToKick.id);
       await loadGame();
+      setShowConfirmModal(false);
+      setConfirmModalType(null);
+      setPlayerToKick(null);
     } catch (error) {
       console.error("Failed to kick player:", error);
       alert("Failed to kick player. Please try again.");
+      setShowConfirmModal(false);
+      setConfirmModalType(null);
+      setPlayerToKick(null);
     }
   }
 
@@ -846,406 +835,19 @@ function HostGameContent() {
             
           </div>
 
-      {/* Current Question Control */}
-      {game.questions.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              
-              <h2 className="text-2xl font-bold text-slate-800">Game control</h2>
-            </div>
-            <button
-              onClick={() => toggleSection('gameControl')}
-              className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-              title={minimizedSections.gameControl ? "Expand" : "Minimize"}
-            >
-              <svg className={`w-5 h-5 text-slate-600 transition-transform ${minimizedSections.gameControl ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
-            </button>
-          </div>
-          {!minimizedSections.gameControl && (
-            <>
-              {currentQuestion ? (
-            <div className="space-y-4 mt-6">
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-slate-600">Current question</span>
-                  <span className="px-3 py-1 bg-white rounded-full text-sm font-bold text-blue-600">
-                    {(game.currentQuestionIndex || 0) + 1} of {game.questions.length}
-                  </span>
-                </div>
-                <p className="text-lg font-semibold text-slate-800">{currentQuestion.text}</p>
-                <div className="mt-2 pt-2 border-t border-blue-200">
-                  <span className="text-sm font-medium text-slate-600">Correct answer: </span>
-                  <span className="text-sm font-bold text-green-700">
-                    {currentQuestion.isFillInBlank
-                      ? (currentQuestion.fillInBlankAnswer || "N/A")
-                      : currentQuestion.isTrueFalse
-                      ? (currentQuestion.answer === 0 ? "True" : "False")
-                      : currentQuestion.choices[currentQuestion.answer]}
-                  </span>
-                </div>
-                {currentQuestion.hasTimer && !game.answersRevealed && (
-                  <div className={`mt-3 flex items-center gap-2 p-2 rounded-lg border-2 ${
-                    timeRemaining === 0 
-                      ? 'bg-red-50 border-red-300' 
-                      : (timeRemaining !== null && timeRemaining <= 10)
-                        ? 'bg-orange-50 border-orange-200' 
-                        : 'bg-orange-50 border-orange-200'
-                  }`}>
-                    <svg className={`w-5 h-5 ${timeRemaining === 0 ? 'text-red-600' : 'text-orange-600'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    {timeRemaining === null ? (
-                      <span className="text-sm font-medium text-slate-600">
-                        Timer active ({currentQuestion.timerSeconds}s)
-                      </span>
-                    ) : timeRemaining === 0 ? (
-                      <span className="text-sm font-bold text-red-600">Time's Up!</span>
-                    ) : (
-                      <span className={`text-sm font-bold ${timeRemaining <= 10 ? 'text-red-600 animate-pulse' : 'text-orange-600'}`}>
-                        {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')} remaining
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-              
-              {/* Answer Status */}
-              {!game.answersRevealed && (
-                <div className="bg-blue-50 rounded-xl p-4 border-2 border-blue-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="font-bold text-blue-900 flex items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Answer status
-                    </p>
-                    <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-sm font-bold">
-                      {game.playerAnswers?.filter((pa: any) => pa.questionId === currentQuestion.id).length || 0} / {game.players.length}
-                    </span>
-                  </div>
-                  <div className="space-y-2 mt-6">
-                    {game.players.map((player: any) => {
-                      const playerAnswer = game.playerAnswers?.find(
-                        (pa: any) => pa.playerId === player.id && pa.questionId === currentQuestion.id
-                      );
-                      const hasAnswered = !!playerAnswer;
-                      // Check if player ran out of time (timer expired and no answer submitted)
-                      const ranOutOfTime = currentQuestion.hasTimer && timeRemaining === 0 && !hasAnswered;
-                      return (
-                        <div key={player.id} className={`p-3 rounded-lg border-2 ${
-                          hasAnswered 
-                            ? 'bg-green-50 border-green-200' 
-                            : ranOutOfTime
-                            ? 'bg-red-50 border-red-200'
-                            : 'bg-slate-50 border-slate-200'
-                        }`}>
-                          <div className="flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                              <span className={`text-lg ${
-                                hasAnswered 
-                                  ? "text-green-600" 
-                                  : ranOutOfTime
-                                  ? "text-red-600"
-                                  : "text-slate-400"
-                              }`}>
-                                {hasAnswered ? "✓" : ranOutOfTime ? "⏱" : "○"}
-                              </span>
-                              <span className={`text-sm font-semibold ${
-                                hasAnswered 
-                                  ? "text-green-800" 
-                                  : ranOutOfTime
-                                  ? "text-red-800"
-                                  : "text-slate-600"
-                              }`}>
-                                {player.username}
-                              </span>
-                              {hasAnswered && (
-                                <span className="text-sm font-medium text-slate-700 px-2 py-1 bg-white rounded border border-green-300">
-                                  {currentQuestion.isFillInBlank && playerAnswer.textAnswer ? (
-                                    playerAnswer.textAnswer
-                                  ) : playerAnswer.answerIndex !== null && playerAnswer.answerIndex !== undefined ? (
-                                    currentQuestion.isTrueFalse 
-                                      ? (playerAnswer.answerIndex === 0 ? "True" : "False")
-                                      : `${String.fromCharCode(65 + playerAnswer.answerIndex)}. ${currentQuestion.choices[playerAnswer.answerIndex] || `Choice ${String.fromCharCode(65 + playerAnswer.answerIndex)}`}`
-                                  ) : (
-                                    <span className="text-slate-500 italic">No answer</span>
-                                  )}
-                                </span>
-                              )}
-                              {ranOutOfTime && (
-                                <span className="text-xs font-medium text-red-700 px-2 py-1 bg-red-100 rounded border border-red-300">
-                                  Ran out of time
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                          {currentQuestion.isFillInBlank && hasAnswered && (
-                            <div className="flex items-center gap-2 flex-wrap mt-2" key={`scoring-${player.id}-${playerAnswer.pointsEarned}-${playerAnswer.isCorrect}`}>
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  defaultChecked={playerAnswer.isCorrect || false}
-                                  className="w-4 h-4 text-green-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-green-500"
-                                  id={`correct-${player.id}`}
-                                  onChange={(e) => {
-                                    const pointsInput = document.getElementById(`points-${player.id}`) as HTMLInputElement;
-                                    const maxPoints = currentQuestion.points * (currentQuestion.multiplier || 1);
-                                    if (e.target.checked && pointsInput) {
-                                      // Auto-fill max points when checked
-                                      pointsInput.value = maxPoints.toString();
-                                    }
-                                    // Auto-save when checkbox changes
-                                    autoSavePlayerScore(player.id, currentQuestion.id);
-                                  }}
-                                />
-                                <span className="text-xs font-medium text-slate-700">Correct</span>
-                              </label>
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={currentQuestion.points * (currentQuestion.multiplier || 1)}
-                                  defaultValue={playerAnswer.pointsEarned || 0}
-                                  className="w-16 px-2 py-1 border border-slate-500 bg-white rounded text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-                                  id={`points-${player.id}`}
-                                  onChange={(e) => {
-                                    const maxPoints = currentQuestion.points * (currentQuestion.multiplier || 1);
-                                    const inputValue = Number(e.target.value);
-                                    // Clamp to max if value exceeds max
-                                    if (inputValue > maxPoints) {
-                                      e.target.value = maxPoints.toString();
-                                    }
-                                    // Auto-save when points change
-                                    autoSavePlayerScore(player.id, currentQuestion.id);
-                                  }}
-                                />
-                                <span className="text-xs text-slate-500">pts</span>
-                              </div>
-                              {savingStatus[player.id] === 'saving' && (
-                                <span className="text-xs text-blue-600">Saving...</span>
-                              )}
-                              {savingStatus[player.id] === 'saved' && (
-                                <span className="text-xs text-green-600 flex items-center gap-1">
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                  Saved
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {!game.answersRevealed ? (
-                <button
-                  className="border border-b-4 border-amber-800 px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
-                  onClick={handleRevealAnswers}
-                  disabled={isRevealing}
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                  </svg>
-                  {isRevealing ? "Revealing..." : "Reveal answers"}
-                </button>
-              ) : (
-                <div className="space-y-4">
-                  {/* Results Summary - Show which players got it right or wrong */}
-                  <div className={`border-2 rounded-xl p-4 ${
-                    currentQuestion.isFillInBlank 
-                      ? 'bg-purple-50 border-purple-200' 
-                      : 'bg-blue-50 border-blue-200'
-                  }`}>
-                    <p className={`text-sm font-semibold mb-3 ${
-                      currentQuestion.isFillInBlank 
-                        ? 'text-purple-700' 
-                        : 'text-blue-700'
-                    }`}>
-                      Results
-                    </p>
-                    <div className="space-y-2">
-                      {game.players.map((player: any) => {
-                        const playerAnswer = game.playerAnswers?.find(
-                          (pa: any) => pa.playerId === player.id && pa.questionId === currentQuestion.id
-                        );
-                        if (!playerAnswer) {
-                          return (
-                            <div key={player.id} className="p-3 rounded-lg border-2 bg-slate-50 border-slate-200">
-                              <div className="flex items-center justify-between">
-                                <p className="font-semibold text-slate-800">{player.username}</p>
-                                <span className="px-3 py-1 rounded-full text-sm font-bold bg-slate-100 text-slate-600">
-                                  No answer
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }
-                        
-                        // Determine the player's answer text for display
-                        let playerAnswerText = "";
-                        if (currentQuestion.isFillInBlank && playerAnswer.textAnswer) {
-                          playerAnswerText = playerAnswer.textAnswer;
-                        } else if (playerAnswer.answerIndex !== null && playerAnswer.answerIndex !== undefined) {
-                          playerAnswerText = currentQuestion.isTrueFalse 
-                            ? (playerAnswer.answerIndex === 0 ? "True" : "False")
-                            : `${String.fromCharCode(65 + playerAnswer.answerIndex)}. ${currentQuestion.choices[playerAnswer.answerIndex] || `Choice ${String.fromCharCode(65 + playerAnswer.answerIndex)}`}`;
-                        } else {
-                          playerAnswerText = "(no answer)";
-                        }
-                        
-                        return (
-                          <div key={player.id} className={`p-3 rounded-lg border-2 ${
-                            playerAnswer.isCorrect === true 
-                              ? 'bg-green-50 border-green-300' 
-                              : 'bg-red-50 border-red-300'
-                          }`}>
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-semibold text-slate-800">{player.username}</p>
-                                <p className="text-sm text-slate-600">Answer: <span className="font-medium">{playerAnswerText}</span></p>
-                              </div>
-                              <div className="text-right">
-                                <span className={`px-3 py-1 rounded-full text-sm font-bold ${
-                                  playerAnswer.isCorrect === true
-                                    ? 'bg-green-100 text-green-700' 
-                                    : 'bg-red-100 text-red-700'
-                                }`}>
-                                  {playerAnswer.isCorrect === true ? '✓ Correct' : '✗ Incorrect'}
-                                </span>
-                                <p className="text-sm font-bold text-slate-700 mt-1">{playerAnswer.pointsEarned || 0} pts</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                  <div className="flex flex-col sm:flex-row gap-3 items-center w-full">
-                    <button
-                      className="border border-b-4 border-emerald-900 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
-                      onClick={handleNextQuestion}
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                      </svg>
-                      Next Question
-                    </button>
-                    <span className="text-slate-500 font-medium whitespace-nowrap">or</span>
-                    <div className="relative flex-1 min-w-0 max-w-md w-full sm:w-auto" ref={questionDropdownRef}>
-                      <button
-                        type="button"
-                        onClick={() => setShowQuestionDropdown(!showQuestionDropdown)}
-                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all flex items-center justify-between gap-2 text-left"
-                      >
-                        <span className="truncate">Jump to Question...</span>
-                        <svg 
-                          className={`w-5 h-5 text-slate-500 flex-shrink-0 transition-transform ${showQuestionDropdown ? 'rotate-180' : ''}`}
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      {showQuestionDropdown && (
-                        <div className="absolute z-50 mt-2 w-full bg-white rounded-xl shadow-2xl border-2 border-slate-200 max-h-96 overflow-y-auto">
-                          <div className="p-2 space-y-1">
-                            {game.questions.map((q: any, idx: number) => (
-                              <button
-                                key={q.id}
-                                type="button"
-                                onClick={() => {
-                                  handleActivateQuestion(idx);
-                                  setShowQuestionDropdown(false);
-                                }}
-                                className="w-full text-left px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-primary/10 hover:to-secondary/10 hover:border-primary/30 border-2 border-transparent transition-all group"
-                              >
-                                <div className="flex items-start gap-2">
-                                  <span className="font-bold text-primary flex-shrink-0 mt-0.5">Q{idx + 1}</span>
-                                  <span className="text-slate-700 group-hover:text-slate-900 break-words">{q.text}</span>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            ) : (
-              <div className="space-y-4 mt-4">
-                <p className="text-slate-800"><strong>No question active.</strong> Start the game or select a question.</p>
-                <div className="flex flex-col md:flex-row gap-3 items-start md:items-center w-full">
-                  <div className="flex items-center gap-2">
-                  <button
-                    className="border border-emerald-900 border-b-4 px-6 py-3 bg-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
-                    onClick={() => handleActivateQuestion(0)}
-                    title="Start game from the first question"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Start game
-                  </button>
-                  <span className="text-slate-500 font-medium whitespace-nowrap">or</span>
-                  </div>
-                  <div className="relative flex-1 min-w-0 max-w-md w-full sm:w-auto" ref={questionDropdownRef}>
-                      <button
-                        type="button"
-                        onClick={() => setShowQuestionDropdown(!showQuestionDropdown)}
-                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all flex items-center justify-between gap-2 text-left"
-                      >
-                        <span className="truncate">Jump to Question...</span>
-                        <svg 
-                          className={`w-5 h-5 text-slate-500 flex-shrink-0 transition-transform ${showQuestionDropdown ? 'rotate-180' : ''}`}
-                          fill="none" 
-                          stroke="currentColor" 
-                          viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-                      {showQuestionDropdown && (
-                        <div className="absolute z-50 mt-2 w-full bg-white rounded-xl shadow-2xl border-2 border-slate-200 max-h-96 overflow-y-auto">
-                          <div className="p-2 space-y-1">
-                            {game.questions.map((q: any, idx: number) => (
-                              <button
-                                key={q.id}
-                                type="button"
-                                onClick={() => {
-                                  handleActivateQuestion(idx);
-                                  setShowQuestionDropdown(false);
-                                }}
-                                className="w-full text-left px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-primary/10 hover:to-secondary/10 hover:border-primary/30 border-2 border-transparent transition-all group"
-                              >
-                                <div className="flex items-start gap-2">
-                                  <span className="font-bold text-primary flex-shrink-0 mt-0.5">Q{idx + 1}</span>
-                                  <span className="text-slate-700 group-hover:text-slate-900 break-words">{q.text}</span>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
+      <GameControls
+        game={game}
+        currentQuestion={currentQuestion}
+        timeRemaining={timeRemaining}
+        isRevealing={isRevealing}
+        savingStatus={savingStatus}
+        minimized={minimizedSections.gameControl}
+        onToggleMinimize={() => toggleSection('gameControl')}
+        onRevealAnswers={handleRevealAnswers}
+        onNextQuestion={handleNextQuestion}
+        onActivateQuestion={handleActivateQuestion}
+        onAutoSavePlayerScore={autoSavePlayerScore}
+      />
 
       {/* Scoreboard */}
       {(game.answersRevealed || game.gameEnded) && (
@@ -1291,59 +893,12 @@ function HostGameContent() {
         </div>
       )}
 
-      <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold text-slate-800">Players</h2>
-            <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-bold">
-              {game.players.length}
-            </span>
-          </div>
-          <button
-            onClick={() => toggleSection('players')}
-            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-            title={minimizedSections.players ? "Expand" : "Minimize"}
-          >
-            <svg className={`w-5 h-5 text-slate-600 transition-transform ${minimizedSections.players ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-            </svg>
-          </button>
-        </div>
-        {!minimizedSections.players && (
-          <>
-        {game.players.length === 0 ? (
-          <div className="text-center py-8 text-slate-500 mt-6">
-            <svg className="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            <p className="font-medium">No players joined yet</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
-            {sortedPlayers.map((player: any) => (
-              <div key={player.id} className="flex justify-between border border-b-4 border-slate-300 items-center p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl hover:border-slate-800 transition-all group">
-                <span className="font-semibold text-slate-800">{player.username}</span>
-                <div className="flex items-center gap-2">
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-bold text-sm">
-                    {player.score || 0} pts
-                  </span>
-                  <button
-                    onClick={() => handleKickPlayer(player.id, player.username)}
-                    className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all opacity-60 hover:opacity-100"
-                    title={`Kick ${player.username}`}
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-          </>
-        )}
-      </div>
+      <PlayerManagement
+        players={game.players}
+        minimized={minimizedSections.players}
+        onToggleMinimize={() => toggleSection('players')}
+        onKickPlayer={handleKickPlayerClick}
+      />
 
       <QuestionForm
         onSubmit={handleAddQuestion}
@@ -1397,333 +952,46 @@ function HostGameContent() {
           </div>
         </div>
         {!minimizedSections.questions && (
-          <>
-        {game.questions.length === 0 ? (
-          <div className="text-center py-12 text-slate-500">
-            <svg className="w-16 h-16 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="font-medium text-lg">No questions added yet</p>
-            <p className="text-sm mt-1">Add your first question above to get started</p>
-          </div>
-        ) : (
-          <ul className="space-y-3 mt-6">
-            {game.questions.map((q: any, idx: number) => (
-              <li
-                key={q.id}
-                draggable={editingQuestionId !== q.id}
-                onDragStart={(e) => handleDragStart(e, q.id)}
-                onDragOver={(e) => handleDragOver(e, idx)}
-                onDragLeave={handleDragLeave}
-                onDrop={(e) => handleDrop(e, idx)}
-                onDragEnd={handleDragEnd}
-                className={`bg-white border-2 rounded-xl p-4 cursor-move transition-all ${
-                  game.currentQuestionIndex === idx 
-                    ? "bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-400 shadow-lg" 
-                    : "border-b-6 border-slate-300 hover:border-slate-800"
-                } ${
-                  draggedQuestionId === q.id ? "opacity-50 scale-95" : ""
-                } ${
-                  dragOverIndex === idx ? "border-blue-500 border-2 bg-blue-50 scale-105" : ""
-                } ${
-                  editingQuestionId === q.id ? "cursor-dyefault" : "hover:shadow-lg"
-                }`}
-              >
-                {editingQuestionId === q.id ? (
-                  <div className="space-y-5">
-                    <h3 className="font-bold text-xl text-slate-800 flex items-center gap-2">
-                      <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                      Edit question {idx + 1}
-                    </h3>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Question type</label>
-                      <div className="flex flex-wrap gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={!editIsFillInBlank && !editIsTrueFalse}
-                            onChange={() => {
-                              setEditIsFillInBlank(false);
-                              setEditIsTrueFalse(false);
-                            }}
-                            className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                          />
-                          <span className="font-medium">Multiple Choice</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={editIsTrueFalse}
-                            onChange={() => {
-                              setEditIsTrueFalse(true);
-                              setEditIsFillInBlank(false);
-                              setEditAnswer(0); // Default to True
-                            }}
-                            className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                          />
-                          <span className="font-medium">True or False</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            checked={editIsFillInBlank}
-                            onChange={() => {
-                              setEditIsFillInBlank(true);
-                              setEditIsTrueFalse(false);
-                            }}
-                            className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                          />
-                          <span className="font-medium">Fill in the Blank</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-slate-700 mb-2">Question text</label>
-                      <input
-                        className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                        placeholder={editIsFillInBlank ? "Enter your fill-in-the-blank question" : "Enter your question"}
-                        value={editQuestionText}
-                        onChange={(e) => setEditQuestionText(e.target.value)}
-                      />
-                    </div>
-                    {editIsFillInBlank && (
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Correct answer</label>
-                        <input
-                          className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                          placeholder="Enter the correct answer"
-                          value={editFillInBlankAnswer}
-                          onChange={(e) => setEditFillInBlankAnswer(e.target.value)}
-                        />
-                      </div>
-                    )}
-                    {!editIsFillInBlank && !editIsTrueFalse && (
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Answer choices</label>
-                        <div className="space-y-3">
-                          {editChoices.map((choice, choiceIdx) => (
-                            <div key={choiceIdx} className="flex items-center gap-3">
-                              <input
-                                type="radio"
-                                checked={editAnswer === choiceIdx}
-                                onChange={() => setEditAnswer(choiceIdx)}
-                                className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                              />
-                              <input
-                                className="flex-1 px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                                placeholder={`Choice ${choiceIdx + 1}`}
-                                value={choice}
-                                onChange={(e) => {
-                                  const newChoices = [...editChoices];
-                                  newChoices[choiceIdx] = e.target.value;
-                                  setEditChoices(newChoices);
-                                }}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {editIsTrueFalse && (
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Correct answer</label>
-                        <div className="flex gap-4">
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={editAnswer === 0}
-                              onChange={() => setEditAnswer(0)}
-                              className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                            />
-                            <span className="font-medium text-lg">True</span>
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                              type="radio"
-                              checked={editAnswer === 1}
-                              onChange={() => setEditAnswer(1)}
-                              className="w-5 h-5 focus:ring-2 focus:ring-primary"
-                            />
-                            <span className="font-medium text-lg">False</span>
-                          </label>
-                        </div>
-                      </div>
-                    )}
-                    <div className="flex flex-wrap items-center gap-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Points</label>
-                        <input
-                          type="number"
-                          className="w-24 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                          value={editPoints}
-                          onChange={(e) => setEditPoints(Number(e.target.value))}
-                          min="1"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-semibold text-slate-700 mb-2">Multiplier</label>
-                        <select
-                          className="px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all bg-white"
-                          value={editMultiplier}
-                          onChange={(e) => setEditMultiplier(Number(e.target.value))}
-                        >
-                          <option value={1}>1x</option>
-                          <option value={2}>2x</option>
-                          <option value={3}>3x</option>
-                          <option value={4}>4x</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="border-t-2 border-slate-200 pt-4 mt-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editHasTimer}
-                            onChange={(e) => setEditHasTimer(e.target.checked)}
-                            className="w-5 h-5 border-2 border-slate-300 rounded focus:ring-2 focus:ring-primary"
-                          />
-                          <span className="text-sm font-semibold text-slate-700">Enable Timer</span>
-                        </label>
-                      </div>
-                      {editHasTimer && (
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">Timer Duration (seconds)</label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="999"
-                            maxLength={3}
-                            className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                            placeholder="e.g., 15 for 15 seconds, 120 for 2 minutes"
-                            value={editTimerSeconds === '' ? '' : editTimerSeconds}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (value === '') {
-                                setEditTimerSeconds(''); // Allow empty temporarily
-                              } else if (value.length <= 3) {
-                                const num = Number(value);
-                                if (!isNaN(num) && num >= 1 && num <= 999) {
-                                  setEditTimerSeconds(num);
-                                }
-                              }
-                            }}
-                            onBlur={(e) => {
-                              if (editTimerSeconds === '' || editTimerSeconds === 0) {
-                                setEditTimerSeconds(30); // Default to 30 if empty on blur
-                              }
-                            }}
-                          />
-                          <p className="text-xs text-slate-500 mt-1">
-                            {Number(editTimerSeconds) || 30} second{(Number(editTimerSeconds) || 30) !== 1 ? 's' : ''} ({Math.floor((Number(editTimerSeconds) || 30) / 60)}m {(Number(editTimerSeconds) || 30) % 60}s)
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="border-t-2 border-slate-200 pt-4 mt-4">
-                      <div className="flex items-center gap-3 mb-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editHasWager}
-                            onChange={(e) => setEditHasWager(e.target.checked)}
-                            className="w-5 h-5 border-2 border-slate-300 rounded focus:ring-2 focus:ring-primary"
-                          />
-                          <span className="text-sm font-semibold text-slate-700">Enable wagering</span>
-                        </label>
-                      </div>
-                      {editHasWager && (
-                        <div>
-                          <label className="block text-sm font-semibold text-slate-700 mb-2">Maximum wager (points)</label>
-                          <input
-                            type="number"
-                            min="1"
-                            className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                            placeholder="Maximum points players can wager"
-                            value={editMaxWager}
-                            onChange={(e) => setEditMaxWager(Number(e.target.value) || 10)}
-                          />
-                          <p className="text-xs text-slate-500 mt-1">
-                            Players can wager up to {editMaxWager} points. If correct, they gain the wager. If wrong, they lose it.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex gap-3 pt-2">
-                      <button
-                        className="border border-b-4 border-emerald-900 px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
-                        onClick={handleSaveEdit}
-                      >
-                        Save
-                      </button>
-                      <button
-                        className="border border-b-4 border-slate-700 px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-300 transition-all flex items-center gap-2"
-                        onClick={handleCancelEdit}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col md:flex-row justify-between items-start">
-                    <div className="flex-1 flex items-start gap-2">
-                      <div className="text-gray-400 mt-1 cursor-grab active:cursor-grabbing" title="Drag to reorder">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                          <circle cx="7" cy="5" r="1.5"/>
-                          <circle cx="13" cy="5" r="1.5"/>
-                          <circle cx="7" cy="10" r="1.5"/>
-                          <circle cx="13" cy="10" r="1.5"/>
-                          <circle cx="7" cy="15" r="1.5"/>
-                          <circle cx="13" cy="15" r="1.5"/>
-                        </svg>
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-semibold">{idx + 1}. {q.text}</p>
-                        <p className="text-sm text-gray-600">
-                          {q.choices.map((c: string, i: number) => (
-                            <span key={i} className={i === q.answer ? "font-bold" : ""}>
-                              {i === q.answer ? "✓ " : ""}{c}
-                              {i < q.choices.length - 1 ? " | " : ""}
-                            </span>
-                          ))}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Points: {q.points} | Multiplier: {q.multiplier || 1}x 
-                          {q.multiplier > 1 && (
-                            <span className="ml-1 text-green-600 font-semibold">
-                              (Max: {q.points * (q.multiplier || 1)})
-                            </span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-3 ml-7 md:ml-0 md:mt-0">
-                      <button
-                        className="px-3 py-1 bg-primary text-white rounded text-sm hover:bg-primary-hover"
-                        onClick={() => handleStartEdit(q)}
-                        title="Edit this question"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="px-2 py-1 bg-red-500 text-white rounded text-sm hover:bg-red-600 flex items-center justify-center"
-                        onClick={() => handleDeleteQuestionClick(q.id)}
-                        title="Delete this question"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-          </>
+          <QuestionList
+            questions={game.questions}
+            currentQuestionIndex={game.currentQuestionIndex}
+            editingQuestionId={editingQuestionId}
+            draggedQuestionId={draggedQuestionId}
+            dragOverIndex={dragOverIndex}
+            editQuestionText={editQuestionText}
+            editChoices={editChoices}
+            editAnswer={editAnswer}
+            editPoints={editPoints}
+            editMultiplier={editMultiplier}
+            editIsFillInBlank={editIsFillInBlank}
+            editIsTrueFalse={editIsTrueFalse}
+            editHasTimer={editHasTimer}
+            editTimerSeconds={editTimerSeconds}
+            editFillInBlankAnswer={editFillInBlankAnswer}
+            editHasWager={editHasWager}
+            editMaxWager={editMaxWager}
+            onStartEdit={handleStartEdit}
+            onSaveEdit={handleSaveEdit}
+            onCancelEdit={handleCancelEdit}
+            onDeleteQuestion={handleDeleteQuestionClick}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onDragEnd={handleDragEnd}
+            setEditQuestionText={setEditQuestionText}
+            setEditChoices={setEditChoices}
+            setEditAnswer={setEditAnswer}
+            setEditPoints={setEditPoints}
+            setEditMultiplier={setEditMultiplier}
+            setEditIsFillInBlank={setEditIsFillInBlank}
+            setEditIsTrueFalse={setEditIsTrueFalse}
+            setEditHasTimer={setEditHasTimer}
+            setEditTimerSeconds={setEditTimerSeconds}
+            setEditFillInBlankAnswer={setEditFillInBlankAnswer}
+            setEditHasWager={setEditHasWager}
+            setEditMaxWager={setEditMaxWager}
+          />
         )}
       </div>
       </div>
@@ -1735,7 +1003,7 @@ function HostGameContent() {
           setShowConfirmModal(false);
           setConfirmModalType(null);
         }}
-        title={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete question' : 'End game'}
+        title={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete question' : confirmModalType === 'kick' ? 'Kick player' : 'End game'}
         message={
           confirmModalType === 'reset'
             ? (
@@ -1755,6 +1023,12 @@ function HostGameContent() {
                   Are you sure you want to delete this question? <strong>This action cannot be undone.</strong>
                 </>
               )
+            : confirmModalType === 'kick'
+            ? (
+                <>
+                  Are you sure you want to kick <strong>{playerToKick?.username}</strong>? They will be removed from the game.
+                </>
+              )
             : (
                 <>
                   Are you sure you want to end the game? Players will see the final scoreboard.
@@ -1764,13 +1038,14 @@ function HostGameContent() {
               )
         }
         isConfirmDialog={true}
-        confirmText={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete' : 'End game'}
+        confirmText={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete' : confirmModalType === 'kick' ? 'Kick player' : 'End game'}
         cancelText="Cancel"
-        onConfirm={confirmModalType === 'reset' ? handleResetGame : confirmModalType === 'delete' ? handleDeleteQuestion : handleEndGame}
+        onConfirm={confirmModalType === 'reset' ? handleResetGame : confirmModalType === 'delete' ? handleDeleteQuestion : confirmModalType === 'kick' ? handleKickPlayer : handleEndGame}
         onCancel={() => {
           setShowConfirmModal(false);
           setConfirmModalType(null);
           setQuestionToDelete(null);
+          setPlayerToKick(null);
         }}
         showCloseButton={true}
       />
