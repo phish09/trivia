@@ -250,7 +250,7 @@ export default function GameDisplayPage() {
 
         {/* QR Code Screen - show before game starts */}
         {!gameStarted && !gameEnded && (
-          <div className="flex flex-row items-center justify-center gap-24">
+          <div className="flex flex-col md:flex-row items-center justify-center gap-6 md:gap-24">
             {/* Game Code */}
             <div className="space-y-4">
                 <span className="text-white">Game code:</span>
