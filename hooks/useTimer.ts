@@ -127,7 +127,7 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
           if (prev === null) return game.timeRemaining;
           // Only update if server time is less (we're behind) or very close (within 1 second)
           // This prevents jumps up while allowing corrections when we're behind
-          if (game.timeRemaining <= prev || Math.abs(game.timeRemaining - prev) <= 1) {
+          if (game.timeRemaining !== null && (game.timeRemaining <= prev || Math.abs(game.timeRemaining - prev) <= 1)) {
             return game.timeRemaining;
           }
           // If server time is significantly more, keep local time (prevents jump up)

@@ -1164,7 +1164,7 @@ function HostGameContent() {
             editingQuestionId={editingQuestionId}
             draggedQuestionId={draggedQuestionId}
             dragOverIndex={dragOverIndex}
-            gameType={game.gameType}
+            gameType={game.gameType as 'traditional' | 'wager'}
             editQuestionText={editQuestionText}
             editChoices={editChoices}
             editAnswer={editAnswer}

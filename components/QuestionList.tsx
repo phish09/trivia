@@ -76,7 +76,7 @@ export default function QuestionList({
   editingQuestionId,
   draggedQuestionId,
   dragOverIndex,
-  gameType = 'traditional',
+  gameType = 'traditional' as 'traditional' | 'wager',
   editQuestionText,
   editChoices,
   editAnswer,
@@ -115,6 +115,9 @@ export default function QuestionList({
   setEditRoundNumber,
   setEditIsBonus,
 }: QuestionListProps) {
+  // Store gameType with explicit type to prevent narrowing
+  const gameTypeValue: 'traditional' | 'wager' = gameType;
+
   if (questions.length === 0) {
     return (
       <div className="text-center py-12 text-slate-500">
@@ -128,7 +131,7 @@ export default function QuestionList({
   }
 
   // Group questions by round for wager games
-  const groupedQuestions = gameType === 'wager' 
+  const groupedQuestions = gameTypeValue === 'wager' 
     ? questions.reduce((acc, q, idx) => {
         const round = q.roundNumber || 0;
         if (!acc[round]) {
@@ -143,7 +146,7 @@ export default function QuestionList({
       }, {} as Record<number, { regular: Array<Question & { originalIndex: number }>, bonus: Array<Question & { originalIndex: number }> }>)
     : null;
 
-  if (gameType === 'wager' && groupedQuestions) {
+  if (gameTypeValue === 'wager' && groupedQuestions) {
     // Render grouped by rounds
     const rounds = Object.keys(groupedQuestions).map(Number).sort((a, b) => a - b);
     return (
@@ -312,34 +315,7 @@ export default function QuestionList({
                               </div>
                             </div>
                           )}
-                          {gameType === 'traditional' && (
-                            <div className="flex flex-wrap items-center gap-4">
-                              <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Points</label>
-                                <input
-                                  type="number"
-                                  className="w-24 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
-                                  value={editPoints}
-                                  onChange={(e) => setEditPoints(Number(e.target.value))}
-                                  min="1"
-                                />
-                              </div>
-                              <div>
-                                <label className="block text-sm font-semibold text-slate-700 mb-2">Multiplier</label>
-                                <select
-                                  className="px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all bg-white"
-                                  value={editMultiplier}
-                                  onChange={(e) => setEditMultiplier(Number(e.target.value))}
-                                >
-                                  <option value={1}>1x</option>
-                                  <option value={2}>2x</option>
-                                  <option value={3}>3x</option>
-                                  <option value={4}>4x</option>
-                                </select>
-                              </div>
-                            </div>
-                          )}
-                          {gameType === 'wager' && (
+                          {gameTypeValue === 'wager' && (
                             <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
                               <p className="text-sm text-purple-800">
                                 <strong>Note:</strong> In wager games, points are determined by the slot players choose.
@@ -468,7 +444,7 @@ export default function QuestionList({
                                 </p>
                               )}
                               <p className="text-sm text-gray-500">
-                                {gameType === 'wager' && (q.roundNumber || q.isBonus) && (
+                                {gameTypeValue === 'wager' && (q.roundNumber || q.isBonus) && (
                                   <span className="text-purple-600 font-semibold">
                                     Round {q.roundNumber || '?'} {q.isBonus ? '(Bonus)' : ''}
                                   </span>
@@ -784,7 +760,7 @@ export default function QuestionList({
                                     </p>
                                   )}
                                   <p className="text-sm text-gray-500">
-                                    {gameType === 'wager' && (q.roundNumber || q.isBonus) && (
+                                    {gameTypeValue === 'wager' && (q.roundNumber || q.isBonus) && (
                                       <span className="text-purple-600 font-semibold">
                                         Round {q.roundNumber || '?'} (Bonus)
                                       </span>
@@ -971,7 +947,7 @@ export default function QuestionList({
                   </div>
                 </div>
               )}
-              {gameType === 'traditional' && (
+              {gameTypeValue === 'traditional' && (
                 <div className="flex flex-wrap items-center gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-slate-700 mb-2">Points</label>
@@ -1121,7 +1097,7 @@ export default function QuestionList({
                     </p>
                   )}
                   <p className="text-sm text-gray-500">
-                    {gameType === 'traditional' && (
+                    {gameTypeValue === 'traditional' && (
                       <>
                         Points: {q.points} | Multiplier: {q.multiplier || 1}x 
                         {q.multiplier && q.multiplier > 1 && (
@@ -1131,7 +1107,7 @@ export default function QuestionList({
                         )}
                       </>
                     )}
-                    {gameType === 'wager' && (q.roundNumber || q.isBonus) && (
+                    {gameTypeValue === 'wager' && (q.roundNumber || q.isBonus) && (
                       <span className="text-purple-600 font-semibold">
                         Round {q.roundNumber || '?'} {q.isBonus ? '(Bonus)' : ''}
                       </span>

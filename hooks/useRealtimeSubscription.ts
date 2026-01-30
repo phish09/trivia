@@ -84,7 +84,7 @@ export function useRealtimeSubscription({
         },
         (payload) => {
           // Filter client-side: only reload if this answer is for one of our questions
-          const questionId = payload.new?.question_id || payload.old?.question_id;
+          const questionId = (payload.new as any)?.question_id || (payload.old as any)?.question_id;
           
           if (questionId && (questionIds.size === 0 || questionIds.has(questionId))) {
             // Player answer changed - use normal debounce (less critical than host actions)
