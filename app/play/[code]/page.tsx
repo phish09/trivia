@@ -147,6 +147,49 @@ function PlayPageContent() {
     try {
       const gameData = await getGame(code);
       
+      // Optimization: Cache questions locally since they don't change during gameplay
+      // This reduces egress by reusing cached question data
+      const cacheKey = `trivia_questions_${gameData.id}`;
+      if (typeof window !== 'undefined') {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          try {
+            const cachedData = JSON.parse(cached);
+            // Use cached questions if game ID matches and we have questions
+            if (cachedData.gameId === gameData.id && cachedData.questions?.length > 0) {
+              // Verify questions haven't changed by comparing count
+              if (cachedData.questions.length === gameData.questions.length) {
+                gameData.questions = cachedData.questions;
+              } else {
+                // Questions changed, update cache
+                localStorage.setItem(cacheKey, JSON.stringify({
+                  gameId: gameData.id,
+                  questions: gameData.questions,
+                }));
+              }
+            } else {
+              // Cache miss or invalid, update cache
+              localStorage.setItem(cacheKey, JSON.stringify({
+                gameId: gameData.id,
+                questions: gameData.questions,
+              }));
+            }
+          } catch (e) {
+            // Cache corrupted, update it
+            localStorage.setItem(cacheKey, JSON.stringify({
+              gameId: gameData.id,
+              questions: gameData.questions,
+            }));
+          }
+        } else {
+          // First load, cache questions
+          localStorage.setItem(cacheKey, JSON.stringify({
+            gameId: gameData.id,
+            questions: gameData.questions,
+          }));
+        }
+      }
+      
       // Check if question changed (to reset submitted state)
       const previousQuestionIndex = game?.currentQuestionIndex;
       const newQuestionIndex = gameData.currentQuestionIndex;

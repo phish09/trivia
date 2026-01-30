@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
 type Props = {
-  params: { code: string };
+  params: Promise<{ code: string }>;
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const code = params.code;
+  const { code } = await params;
   
   // Get the base URL - Netlify provides URL env var automatically
   // Also check for NEXT_PUBLIC_SITE_URL which can be set in Netlify dashboard

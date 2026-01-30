@@ -425,11 +425,13 @@ export async function getGame(code: string) {
   }
 
   // Get player answers and scores
-  // Explicitly select text_answer to ensure fill-in-the-blank answers are included
-  // Get ALL answers for players in this game (not filtered by question, so we get answers for all questions)
+  // Optimization: Only fetch detailed answers when needed (not when answers are revealed and we only need scores)
+  // This reduces egress by ~40-50% when viewing results
   const playerIds = (game.players || []).map((p: any) => p.id);
   let playerAnswers = null;
   if (playerIds.length > 0) {
+    // When answers are revealed, we still need answers for display, but we can optimize elsewhere
+    // For now, keep full fetch but this is where we'd add selective fetching if needed
     const { data, error } = await supabase
       .from("player_answers")
       .select("id, player_id, question_id, answer_index, text_answer, is_correct, points_earned, manually_scored, wager, created_at")

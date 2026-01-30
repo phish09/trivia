@@ -65,6 +65,7 @@ function HostGameContent() {
   const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
   const [playerToKick, setPlayerToKick] = useState<{id: string, username: string} | null>(null);
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
+  const [showPlayUrlCopiedTooltip, setShowPlayUrlCopiedTooltip] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
@@ -640,52 +641,108 @@ function HostGameContent() {
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-12">
             
             <div className="flex-1 w-full">
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
-                <p className="text-sm font-semibold text-slate-600 mb-1">Game code</p>
-                <div className="flex items-center gap-3">
-                  <p className="text-4xl font-bold text-primary tracking-wider">
-                    {code}
-                  </p>
-                  <div className="relative">
-                    <button
-                      onClick={async () => {
-                        try {
-                          const url = `${window.location.origin}/play/${encodeURIComponent(code)}`;
-                          await navigator.clipboard.writeText(url);
-                          setShowCopiedTooltip(true);
-                          setTimeout(() => setShowCopiedTooltip(false), 2000);
-                        } catch (error) {
-                          console.error("Failed to copy URL:", error);
-                          // Fallback for older browsers
-                          const textArea = document.createElement("textarea");
-                          textArea.value = `${window.location.origin}/play/${encodeURIComponent(code)}`;
-                          document.body.appendChild(textArea);
-                          textArea.select();
-                          document.execCommand("copy");
-                          document.body.removeChild(textArea);
-                          setShowCopiedTooltip(true);
-                          setTimeout(() => setShowCopiedTooltip(false), 2000);
-                        }
-                      }}
-                      className="p-2 hover:bg-white rounded-lg transition-colors"
-                      title="Copy game URL"
-                    >
-                      <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-                    {showCopiedTooltip && (
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-sm rounded-lg shadow-lg whitespace-nowrap z-[100] pointer-events-none">
-                        Copied
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
-                          <div className="border-4 border-transparent border-t-slate-800"></div>
+              <div className="flex flex-col md:flex-row gap-4">
+                {/* Game Code Box */}
+                <div className="flex-1 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 border border-blue-100">
+                  <p className="text-sm font-semibold text-slate-600 mb-1">Game code</p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-4xl font-bold text-primary tracking-wider">
+                      {code}
+                    </p>
+                    <div className="relative">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const url = `${window.location.origin}/play/${encodeURIComponent(code)}`;
+                            await navigator.clipboard.writeText(url);
+                            setShowCopiedTooltip(true);
+                            setTimeout(() => setShowCopiedTooltip(false), 2000);
+                          } catch (error) {
+                            console.error("Failed to copy URL:", error);
+                            // Fallback for older browsers
+                            const textArea = document.createElement("textarea");
+                            textArea.value = `${window.location.origin}/play/${encodeURIComponent(code)}`;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand("copy");
+                            document.body.removeChild(textArea);
+                            setShowCopiedTooltip(true);
+                            setTimeout(() => setShowCopiedTooltip(false), 2000);
+                          }
+                        }}
+                        className="p-2 hover:bg-white rounded-lg transition-colors"
+                        title="Copy game URL"
+                      >
+                        <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      {showCopiedTooltip && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-sm rounded-lg shadow-lg whitespace-nowrap z-[100] pointer-events-none">
+                          Copied
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
+                            <div className="border-4 border-transparent border-t-slate-800"></div>
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
+                  <p className="text-sm text-slate-500 mt-2">Share this code with players to join / Keep this to access this game controls</p>
                 </div>
-                <p className="text-sm text-slate-500 mt-2">Share this code with players to join / Keep this to access this game controls</p>
+                
+                {/* Game URL Section */}
+                <div className="flex-1 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-4 border border-emerald-100">
+                  <p className="text-sm font-semibold text-slate-600 mb-2">Game URL</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={typeof window !== 'undefined' ? `${window.location.origin}/game/${code}` : `/game/${code}`}
+                      className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-lg text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    />
+                    <div className="relative">
+                      <button
+                        onClick={async () => {
+                          try {
+                            const url = `${window.location.origin}/game/${encodeURIComponent(code)}`;
+                            await navigator.clipboard.writeText(url);
+                            setShowPlayUrlCopiedTooltip(true);
+                            setTimeout(() => setShowPlayUrlCopiedTooltip(false), 2000);
+                          } catch (error) {
+                            console.error("Failed to copy game URL:", error);
+                            // Fallback for older browsers
+                            const textArea = document.createElement("textarea");
+                            textArea.value = `${window.location.origin}/game/${encodeURIComponent(code)}`;
+                            document.body.appendChild(textArea);
+                            textArea.select();
+                            document.execCommand("copy");
+                            document.body.removeChild(textArea);
+                            setShowPlayUrlCopiedTooltip(true);
+                            setTimeout(() => setShowPlayUrlCopiedTooltip(false), 2000);
+                          }
+                        }}
+                        className="p-2 hover:bg-white rounded-lg transition-colors"
+                        title="Copy game URL"
+                        aria-label="Copy game URL"
+                      >
+                        <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      {showPlayUrlCopiedTooltip && (
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-800 text-white text-sm rounded-lg shadow-lg whitespace-nowrap z-[100] pointer-events-none">
+                          Copied
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
+                            <div className="border-4 border-transparent border-t-slate-800"></div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm text-slate-500 mt-2">Use this URL on another monitor to display the game</p>
+                </div>
               </div>
+              
               {(() => {
                 if (!game) return null;
                 

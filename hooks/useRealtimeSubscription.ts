@@ -21,22 +21,24 @@ export function useRealtimeSubscription({
   // Debounce update calls to prevent excessive renders
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
-  const DEBOUNCE_MS = 500; // Minimum 500ms between updates (reduces renders but still responsive)
+  const DEBOUNCE_MS_NORMAL = 500; // For player answers (less critical)
+  const DEBOUNCE_MS_FAST = 100; // For game state changes (host actions - more critical)
 
-  const debouncedUpdate = useCallback(() => {
+  const debouncedUpdate = useCallback((isGameStateChange = false) => {
     const now = Date.now();
+    const debounceMs = isGameStateChange ? DEBOUNCE_MS_FAST : DEBOUNCE_MS_NORMAL;
     const timeSinceLastUpdate = now - lastUpdateTimeRef.current;
 
     if (updateTimeoutRef.current) {
       clearTimeout(updateTimeoutRef.current);
     }
 
-    if (timeSinceLastUpdate < DEBOUNCE_MS) {
+    if (timeSinceLastUpdate < debounceMs) {
       // Schedule update after debounce period
       updateTimeoutRef.current = setTimeout(() => {
         lastUpdateTimeRef.current = Date.now();
         onGameUpdate();
-      }, DEBOUNCE_MS - timeSinceLastUpdate);
+      }, debounceMs - timeSinceLastUpdate);
     } else {
       // Update immediately if enough time has passed
       lastUpdateTimeRef.current = now;
@@ -67,8 +69,8 @@ export function useRealtimeSubscription({
           filter: `id=eq.${game.id}`,
         },
         () => {
-          // Game state changed, reload game data (debounced)
-          debouncedUpdate();
+          // Game state changed (host actions) - use faster debounce for responsiveness
+          debouncedUpdate(true);
         }
       )
       .on(
@@ -85,8 +87,8 @@ export function useRealtimeSubscription({
           const questionId = payload.new?.question_id || payload.old?.question_id;
           
           if (questionId && (questionIds.size === 0 || questionIds.has(questionId))) {
-            // Player answer changed for a question in this game, reload game data (debounced)
-            debouncedUpdate();
+            // Player answer changed - use normal debounce (less critical than host actions)
+            debouncedUpdate(false);
           }
         }
       )
@@ -99,8 +101,8 @@ export function useRealtimeSubscription({
           filter: `game_id=eq.${game.id}`,
         },
         () => {
-          // Players changed (joined/left), reload game data (debounced)
-          debouncedUpdate();
+          // Players changed (joined/left) - use normal debounce
+          debouncedUpdate(false);
         }
       )
       .subscribe((status) => {
@@ -117,7 +119,7 @@ export function useRealtimeSubscription({
       }
       supabase.removeChannel(channel);
     };
-  }, [game?.id, game?.questions, onGameUpdate]);
+  }, [game?.id, game?.questions, debouncedUpdate]);
 
   // Poll for updates as fallback (when there's an active question)
   // This ensures fill-in-the-blank and all answer types update automatically
@@ -128,11 +130,12 @@ export function useRealtimeSubscription({
     const shouldPoll = hasActiveQuestion && !game.answersRevealed;
 
     if (shouldPoll) {
-      // Poll every 2.5 seconds to check for new player answers (balance between responsiveness and performance)
+      // Poll every 5 seconds as fallback (reduced from 2.5s for 50% egress reduction)
+      // Realtime handles most updates instantly; polling is just a safety net
       // This catches any answers that realtime might miss, including fill-in-the-blank
-      const POLL_INTERVAL = 2500; // 2.5 seconds
+      const POLL_INTERVAL = 5000; // 5 seconds
       const interval = setInterval(() => {
-        debouncedUpdate();
+        debouncedUpdate(false);
       }, POLL_INTERVAL);
       return () => clearInterval(interval);
     }

@@ -219,7 +219,7 @@ export default function GameDisplayPage() {
       )}
       <div className="max-w-6xl w-full text-center space-y-8">
         {/* Logo - show always */}
-        <div className="animate-pop-in inline-block w-1/3 md:w-1/4 mx-auto">
+        <div className="animate-pop-in inline-block w-1/3 md:w-1/6 mx-auto">
           <svg width="100%" height="100%" viewBox="0 0 414 128" fill="none" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <mask id="path-1-outside-1_1_7" maskUnits="userSpaceOnUse" x="0" y="19.1168" width="203" height="87" fill="black">
           <rect fill="white" y="19.1168" width="203" height="87"/>
