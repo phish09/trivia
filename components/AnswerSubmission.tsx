@@ -229,7 +229,7 @@ export default function AnswerSubmission({
                 : "text-slate-700"
             }`}
           >
-            {isBonus ? `Select wager amount (up to ${bonusMaxWager} points)` : 'Select point slot'}
+            {isBonus ? `Select wager amount (up to ${bonusMaxWager} points)` : 'Points wager'}
           </label>
           {isBonus ? (
             <div className="flex items-center gap-3">
