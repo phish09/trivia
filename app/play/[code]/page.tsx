@@ -20,6 +20,8 @@ function PlayPageContent() {
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [textAnswer, setTextAnswer] = useState<string>("");
   const [wager, setWager] = useState<number>(0);
+  const [wagerSlot, setWagerSlot] = useState<number | null>(null);
+  const [usedSlots, setUsedSlots] = useState<number[]>([]);
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [verifying, setVerifying] = useState(true);
@@ -157,11 +159,18 @@ function PlayPageContent() {
             const cachedData = JSON.parse(cached);
             // Use cached questions if game ID matches and we have questions
             if (cachedData.gameId === gameData.id && cachedData.questions?.length > 0) {
-              // Verify questions haven't changed by comparing count
-              if (cachedData.questions.length === gameData.questions.length) {
+              // Verify questions haven't changed by comparing count AND order
+              // Check if question IDs and orders match (to detect reordering)
+              const questionsMatch = cachedData.questions.length === gameData.questions.length &&
+                cachedData.questions.every((cachedQ: any, idx: number) => {
+                  const freshQ = gameData.questions[idx];
+                  return cachedQ.id === freshQ.id && cachedQ.questionOrder === freshQ.questionOrder;
+                });
+              
+              if (questionsMatch) {
                 gameData.questions = cachedData.questions;
               } else {
-                // Questions changed, update cache
+                // Questions changed or reordered, update cache
                 localStorage.setItem(cacheKey, JSON.stringify({
                   gameId: gameData.id,
                   questions: gameData.questions,
@@ -223,6 +232,12 @@ function PlayPageContent() {
             } else {
               setSelectedAnswer(playerAnswer.answerIndex);
             }
+            if (gameData.gameType === 'wager') {
+              setWagerSlot(playerAnswer.wagerSlot || null);
+              if (currentQuestion.isBonus) {
+                setWager(playerAnswer.wager || 0);
+              }
+            }
             // Only set submitted to true if answers haven't been revealed yet
             // When answers are revealed, we show the results view instead
             if (!gameData.answersRevealed) {
@@ -243,16 +258,44 @@ function PlayPageContent() {
                 setSelectedAnswer(null);
               }
               setWager(0);
+              setWagerSlot(null);
               setSubmitted(false);
             }
             // Otherwise, preserve the current answer state during polling
             // This allows players to select an answer without it being deselected on each poll
+          }
+          
+          // Load used slots for wager games
+          if (gameData.gameType === 'wager' && currentQuestion.roundNumber && playerId) {
+            try {
+              const supabase = getSupabaseClientForRealtime();
+              const { data: slotData } = await supabase
+                .from("player_wager_slots")
+                .select("used_slots")
+                .eq("player_id", playerId)
+                .eq("game_id", gameData.id)
+                .eq("round_number", currentQuestion.roundNumber)
+                .single();
+              
+              if (slotData) {
+                setUsedSlots(slotData.used_slots || []);
+              } else {
+                setUsedSlots([]);
+              }
+            } catch (error) {
+              console.error("Failed to load used slots:", error);
+              setUsedSlots([]);
+            }
+          } else {
+            setUsedSlots([]);
           }
         } else {
           // Question doesn't exist yet, reset state
           setSelectedAnswer(null);
           setTextAnswer("");
           setWager(0);
+          setWagerSlot(null);
+          setUsedSlots([]);
           setSubmitted(false);
         }
       } else {
@@ -260,6 +303,8 @@ function PlayPageContent() {
         setSelectedAnswer(null);
         setTextAnswer("");
         setWager(0);
+        setWagerSlot(null);
+        setUsedSlots([]);
         setSubmitted(false);
       }
     } catch (error: any) {
@@ -1122,6 +1167,21 @@ function PlayPageContent() {
       if (selectedAnswer === null) return;
     }
 
+    // Validate wager slot selection for wager games
+    if (game.gameType === 'wager') {
+      if (currentQuestion.isBonus) {
+        if (wager === 0) {
+          alert("Please enter a wager amount for the bonus question");
+          return;
+        }
+      } else {
+        if (wagerSlot === null) {
+          alert("Please select a point slot");
+          return;
+        }
+      }
+    }
+
     // Verify player still exists before submitting
     const playerExists = game.players.some((p: any) => p.id === playerId);
     if (!playerExists) {
@@ -1134,12 +1194,16 @@ function PlayPageContent() {
 
     try {
       const wagerAmount = currentQuestion.hasWager && wager > 0 ? wager : undefined;
+      const roundNumber = currentQuestion.roundNumber || null;
+      const slotToSubmit = game.gameType === 'wager' && !currentQuestion.isBonus ? wagerSlot : null;
+      const wagerForBonus = game.gameType === 'wager' && currentQuestion.isBonus ? wager : undefined;
+      
       if (currentQuestion.isFillInBlank) {
         // Use textAnswerDisplay for immediate value, or textAnswer if display hasn't synced yet
         const answerToSubmit = textAnswerDisplay.trim() || textAnswer.trim();
-        await submitAnswer(playerId, currentQuestion.id, null, answerToSubmit, wagerAmount);
+        await submitAnswer(playerId, currentQuestion.id, null, answerToSubmit, wagerForBonus || wagerAmount, slotToSubmit, roundNumber);
       } else {
-        await submitAnswer(playerId, currentQuestion.id, selectedAnswer, undefined, wagerAmount);
+        await submitAnswer(playerId, currentQuestion.id, selectedAnswer, undefined, wagerForBonus || wagerAmount, slotToSubmit, roundNumber);
       }
       setSubmitted(true);
       
@@ -1505,8 +1569,8 @@ function PlayPageContent() {
                         
                         {!isCorrect && (
                           <div className="mt-4 p-3 rounded-lg bg-white border-2 border-emerald-600">
-                            <span className="text-xs font-semibold text-slate-600">Correct answer:</span>
-                            <div className="text-black">
+                            <span className="text-xs font-semibold text-slate-600 !leading-tight">Correct answer:</span>
+                            <div className="text-black !leading-tight">
                               {correctAnswerDisplay}
                             </div>
                           </div>
@@ -1861,8 +1925,8 @@ function PlayPageContent() {
                       </p>
                       <div>
                         <p className="text-gray-700 font-semibold flex items-center gap-1">
-                          <span className="uppercase text-xs tracking-wider">Correct answer:</span>{" "}
-                          <span className="font-bold text-slate-900">
+                          <span className="uppercase text-xs tracking-wider relative top-px">Correct answer:</span>
+                          <span className="font-bold text-slate-900 leading-tight">
                             {currentQuestion.isTrueFalse 
                                 ? (currentQuestion.answer === 0 ? "True" : "False")
                                 : currentQuestion.isFillInBlank
@@ -2141,6 +2205,7 @@ function PlayPageContent() {
             answersRevealed={game.answersRevealed}
             questionHeadingRef={questionHeadingRef}
             formatQuestionText={formatQuestionText}
+            gameType={game.gameType}
           />
 
           {/* Screen reader announcements */}
@@ -2172,13 +2237,17 @@ function PlayPageContent() {
             textAnswer={textAnswer}
             textAnswerDisplay={textAnswerDisplay}
             wager={wager}
+            wagerSlot={wagerSlot}
             submitted={submitted}
             timeRemaining={timeRemaining}
             game={game}
+            usedSlots={usedSlots}
+            isBonus={currentQuestion.isBonus || false}
             answerButtonRefs={answerButtonRefs}
             onAnswerSelect={handleAnswerSelect}
             onTextAnswerChange={handleTextAnswerChange}
             onWagerChange={setWager}
+            onWagerSlotSelect={setWagerSlot}
             onSubmit={handleSubmitAnswer}
             onAnswerKeyDown={handleAnswerKeyDown}
           />

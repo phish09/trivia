@@ -8,6 +8,8 @@ interface Question {
   multiplier?: number;
   hasTimer?: boolean;
   timerSeconds?: number | null;
+  roundNumber?: number | null;
+  isBonus?: boolean;
 }
 
 interface QuestionDisplayProps {
@@ -16,6 +18,7 @@ interface QuestionDisplayProps {
   answersRevealed: boolean;
   questionHeadingRef: React.MutableRefObject<HTMLHeadingElement | null>;
   formatQuestionText: (text: string) => React.ReactNode;
+  gameType?: 'traditional' | 'wager';
 }
 
 export default function QuestionDisplay({
@@ -24,19 +27,34 @@ export default function QuestionDisplay({
   answersRevealed,
   questionHeadingRef,
   formatQuestionText,
+  gameType = 'traditional',
 }: QuestionDisplayProps) {
   return (
     <div className="mb-6">
-      <div className="flex items-center justify-center mb-4">
-        <div className="text-sm text-slate-600">
-          <span className="font-bold text-emerald-600 border border-b-2 border-emerald-600 bg-emerald-100 rounded-full px-3 py-1">{currentQuestion.points} pts</span>
-          {currentQuestion.multiplier && currentQuestion.multiplier > 1 && (
-            <span className="ml-2 px-2 py-1 bg-tertiary text-white rounded-full font-bold">
-              {currentQuestion.multiplier}x
-            </span>
-          )}
+      {gameType !== 'wager' && (
+        <div className="flex items-center justify-center mb-4">
+          <div className="text-sm text-slate-600">
+            <span className="font-bold text-emerald-600 border border-b-2 border-emerald-600 bg-emerald-100 rounded-full px-3 py-1">{currentQuestion.points} pts</span>
+            {currentQuestion.multiplier && currentQuestion.multiplier > 1 && (
+              <span className="ml-2 px-2 py-1 bg-tertiary text-white rounded-full font-bold">
+                {currentQuestion.multiplier}x
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+      {gameType === 'wager' && currentQuestion.roundNumber && (
+        <div className="flex items-center justify-center mb-4">
+          <div className="text-sm text-slate-600">
+            <span className="font-bold text-purple-600 border border-b-2 border-purple-600 bg-purple-100 rounded-full px-3 py-1">
+              Round {currentQuestion.roundNumber}
+              {currentQuestion.isBonus && (
+                <span className="ml-2 text-yellow-600">(Bonus)</span>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
       {currentQuestion.hasTimer && timeRemaining !== null && timeRemaining > 0 && !answersRevealed && (
         <div className="mb-4 flex items-center justify-center gap-2 p-3 rounded-xl">
           <svg className={`w-6 h-6 text-orange-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

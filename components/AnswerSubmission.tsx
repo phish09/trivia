@@ -23,16 +23,23 @@ interface AnswerSubmissionProps {
   textAnswer: string;
   textAnswerDisplay: string;
   wager: number;
+  wagerSlot: number | null;
   submitted: boolean;
   timeRemaining: number | null;
   game: {
     answersRevealed: boolean;
     hostName?: string;
+    gameType?: 'traditional' | 'wager';
+    wagerAmounts?: number[];
+    bonusMaxWager?: number;
   };
+  usedSlots?: number[];
+  isBonus?: boolean;
   answerButtonRefs: React.MutableRefObject<(HTMLButtonElement | null)[]>;
   onAnswerSelect: (answerIndex: number) => void;
   onTextAnswerChange: (value: string) => void;
   onWagerChange: (value: number) => void;
+  onWagerSlotSelect?: (slot: number) => void;
   onSubmit: () => void;
   onAnswerKeyDown: (
     e: React.KeyboardEvent<HTMLButtonElement>,
@@ -48,17 +55,24 @@ export default function AnswerSubmission({
   textAnswer,
   textAnswerDisplay,
   wager,
+  wagerSlot,
   submitted,
   timeRemaining,
   game,
+  usedSlots = [],
+  isBonus = false,
   answerButtonRefs,
   onAnswerSelect,
   onTextAnswerChange,
   onWagerChange,
+  onWagerSlotSelect,
   onSubmit,
   onAnswerKeyDown,
 }: AnswerSubmissionProps) {
   const isDisabled = submitted || (currentQuestion.hasTimer && timeRemaining === 0);
+  const isWagerGame = game.gameType === 'wager';
+  const wagerAmounts = game.wagerAmounts || [2, 4, 6, 8, 10];
+  const bonusMaxWager = game.bonusMaxWager || 20;
 
   return (
     <>
@@ -201,7 +215,90 @@ export default function AnswerSubmission({
         </div>
       )}
 
-      {currentQuestion.hasWager && !submitted && (
+      {/* Wager slot selection for wager games */}
+      {isWagerGame && onWagerSlotSelect && (
+        <div className={`mb-6 p-4 rounded-xl border-2 ${
+          (currentQuestion.hasTimer && timeRemaining === 0)
+            ? "bg-slate-50 border-slate-300 opacity-60"
+            : "bg-purple-50 border-purple-200"
+        }`}>
+          <label 
+            className={`block text-sm font-semibold mb-3 ${
+              (currentQuestion.hasTimer && timeRemaining === 0)
+                ? "text-slate-500"
+                : "text-slate-700"
+            }`}
+          >
+            {isBonus ? `Select wager amount (up to ${bonusMaxWager} points)` : 'Select point slot'}
+          </label>
+          {isBonus ? (
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min="0"
+                max={bonusMaxWager}
+                step="1"
+                inputMode="numeric"
+                aria-label="Bonus wager amount"
+                className={`w-32 px-4 py-2 rounded-xl outline-none transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 ${
+                  submitted || (currentQuestion.hasTimer && timeRemaining === 0)
+                    ? "bg-slate-100 border-slate-300 text-slate-500 cursor-not-allowed"
+                    : "bg-white border-2 border-slate-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                }`}
+                placeholder="0"
+                value={wager || ""}
+                onChange={(e) => {
+                  if (submitted) return;
+                  const rawValue = e.target.value.replace(/[^0-9]/g, '');
+                  const value = rawValue === '' ? 0 : parseInt(rawValue, 10);
+                  onWagerChange(Math.max(0, Math.min(value, bonusMaxWager)));
+                }}
+                disabled={submitted || (currentQuestion.hasTimer && timeRemaining === 0)}
+              />
+              <span className={`text-sm ${
+                (currentQuestion.hasTimer && timeRemaining === 0)
+                  ? "text-slate-500"
+                  : "text-slate-600"
+              }`}>
+                / {bonusMaxWager} max
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-3">
+              {wagerAmounts.map((amount) => {
+                const isUsed = usedSlots.includes(amount);
+                const isSelected = wagerSlot === amount;
+                return (
+                  <button
+                    key={amount}
+                    type="button"
+                    onClick={() => {
+                      if (!submitted && !isUsed && onWagerSlotSelect) {
+                        onWagerSlotSelect(amount);
+                      }
+                    }}
+                    disabled={submitted || isDisabled || isUsed}
+                    className={`px-6 py-3 rounded-xl font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 focus-visible:ring-offset-2 ${
+                      isSelected
+                        ? "bg-purple-600 text-white border-2 border-purple-700 shadow-lg scale-105"
+                        : isUsed
+                        ? "bg-slate-200 text-slate-400 border-2 border-slate-300 cursor-not-allowed opacity-50"
+                        : submitted || isDisabled
+                        ? "bg-slate-100 border-2 border-slate-300 text-slate-500 cursor-not-allowed opacity-60"
+                        : "bg-white border-2 border-purple-300 text-purple-700 hover:border-purple-500 hover:shadow-md"
+                    }`}
+                  >
+                    {amount} pts
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Traditional game wager (optional) */}
+      {!isWagerGame && currentQuestion.hasWager && !submitted && (
         <div className={`mb-6 p-4 rounded-xl border-2 ${
           (currentQuestion.hasTimer && timeRemaining === 0)
             ? "bg-slate-50 border-slate-300 opacity-60"
@@ -236,7 +333,6 @@ export default function AnswerSubmission({
               placeholder="0"
               value={wager || ""}
               onChange={(e) => {
-                // Remove any non-digit characters and parse as integer
                 const rawValue = e.target.value.replace(/[^0-9]/g, '');
                 const value = rawValue === '' ? 0 : parseInt(rawValue, 10);
                 const maxWager = currentQuestion.maxWager || 10;
@@ -284,7 +380,9 @@ export default function AnswerSubmission({
           aria-label="Submit answer"
           aria-disabled={
             (currentQuestion.hasTimer && timeRemaining === 0) ||
-            (currentQuestion.isFillInBlank ? !(textAnswerDisplay.trim() || textAnswer.trim()) : selectedAnswer === null)
+            (currentQuestion.isFillInBlank ? !(textAnswerDisplay.trim() || textAnswer.trim()) : selectedAnswer === null) ||
+            (isWagerGame && !isBonus && wagerSlot === null) ||
+            (isWagerGame && isBonus && wager === 0)
           }
           className={`border border-b-4 border-emerald-900 w-full px-6 py-4 rounded-full font-bold text-lg transition-all disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
             currentQuestion.hasTimer && timeRemaining === 0
@@ -294,7 +392,9 @@ export default function AnswerSubmission({
           onClick={onSubmit}
           disabled={
             (currentQuestion.hasTimer && timeRemaining === 0) ||
-            (currentQuestion.isFillInBlank ? !(textAnswerDisplay.trim() || textAnswer.trim()) : selectedAnswer === null)
+            (currentQuestion.isFillInBlank ? !(textAnswerDisplay.trim() || textAnswer.trim()) : selectedAnswer === null) ||
+            (isWagerGame && !isBonus && wagerSlot === null) ||
+            (isWagerGame && isBonus && wager === 0)
           }
         >
           {currentQuestion.hasTimer && timeRemaining === 0 ? 'Ran out of time' : 'Submit answer'}

@@ -18,6 +18,8 @@ export interface Question {
   fillInBlankAnswer: string | null;
   hasWager: boolean;
   maxWager: number | null;
+  roundNumber: number | null;
+  isBonus: boolean;
 }
 
 export interface QuestionInput {
@@ -33,6 +35,8 @@ export interface QuestionInput {
   fillInBlankAnswer?: string;
   hasWager?: boolean;
   maxWager?: number;
+  roundNumber?: number | null;
+  isBonus?: boolean;
 }
 
 export interface Player {
@@ -51,7 +55,11 @@ export interface PlayerAnswer {
   pointsEarned: number;
   manuallyScored: boolean;
   wager: number | null;
+  wagerSlot: number | null;
+  playerRound: number | null;
 }
+
+export type GameType = 'traditional' | 'wager';
 
 export interface Game {
   id: string;
@@ -66,6 +74,9 @@ export interface Game {
   gameEnded: boolean;
   timeRemaining: number | null;
   questionStartTime: string | null;
+  gameType: GameType;
+  wagerAmounts: number[];
+  bonusMaxWager: number;
   questions: Question[];
   players: Player[];
   playerAnswers: PlayerAnswer[];
@@ -109,6 +120,8 @@ export interface DatabaseQuestion {
   fill_in_blank_answer: string | null;
   has_wager: boolean;
   max_wager: number | null;
+  round_number: number | null;
+  is_bonus: boolean;
   created_at?: string;
 }
 
@@ -130,6 +143,8 @@ export interface DatabasePlayerAnswer {
   points_earned: number | null;
   manually_scored: boolean | null;
   wager: number | null;
+  wager_slot: number | null;
+  player_round: number | null;
   [key: string]: unknown;
 }
 
@@ -145,6 +160,9 @@ export interface DatabaseGame {
   answers_revealed: boolean | null;
   game_ended: boolean | null;
   question_start_time: string | null;
+  game_type: string | null;
+  wager_amounts: number[] | null;
+  bonus_max_wager: number | null;
   players?: DatabasePlayer[];
   questions?: DatabaseQuestion[];
   [key: string]: unknown;

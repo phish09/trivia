@@ -26,13 +26,24 @@ import {
   QUESTION_ORDER_FALLBACK 
 } from "@/lib/constants";
 
-export async function createGame(hostName: string, password?: string): Promise<CreateGameResult> {
+export async function createGame(
+  hostName: string, 
+  password?: string,
+  gameType: 'traditional' | 'wager' = 'traditional'
+): Promise<CreateGameResult> {
   try {
     const supabase = getSupabaseClient();
     const code = generateGameCode();
     const { data, error } = await supabase
       .from("games")
-      .insert({ code, host_name: hostName, host_password: password || null })
+      .insert({ 
+        code, 
+        host_name: hostName, 
+        host_password: password || null,
+        game_type: gameType,
+        wager_amounts: gameType === 'wager' ? [2, 4, 6, 8, 10] : null,
+        bonus_max_wager: gameType === 'wager' ? 20 : null
+      })
       .select()
       .single();
     
@@ -89,6 +100,24 @@ export async function createGame(hostName: string, password?: string): Promise<C
       "UNKNOWN_ERROR"
     );
   }
+}
+
+export async function updateGameSettings(
+  gameId: string,
+  wagerAmounts: number[],
+  bonusMaxWager: number
+) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("games")
+    .update({
+      wager_amounts: wagerAmounts,
+      bonus_max_wager: bonusMaxWager,
+      last_activity: new Date().toISOString()
+    })
+    .eq("id", gameId);
+  
+  if (error) throw new Error(error.message);
 }
 
 export async function verifyPlayerSession(playerId: string, gameCode: string): Promise<{ id: string; username: string } | null> {
@@ -182,17 +211,50 @@ export async function joinGame(code: string, username: string, existingPlayerId?
 
 export async function addQuestion(gameId: string, q: QuestionInput) {
   const supabase = getSupabaseClient();
+  
+  // Get game type to determine if we need auto-round assignment
+  const { data: game } = await supabase
+    .from("games")
+    .select("game_type")
+    .eq("id", gameId)
+    .single();
+  
   // Get the current max question_order for this game to add new question at the end
   const { data: existingQuestions } = await supabase
     .from("questions")
-    .select("question_order")
+    .select("question_order, round_number, is_bonus")
     .eq("game_id", gameId)
-    .order("question_order", { ascending: false })
-    .limit(1);
+    .order("question_order", { ascending: false });
   
   const nextOrder = existingQuestions && existingQuestions.length > 0 
     ? (existingQuestions[0].question_order || 0) + 1 
     : 0;
+  
+  // Auto-assign round for wager games if not explicitly provided
+  let roundNumber = q.roundNumber;
+  let isBonus = q.isBonus || false;
+  
+  if (game?.game_type === 'wager' && (roundNumber === undefined || roundNumber === null)) {
+    // Calculate round number: every 6 questions is a round (5 regular + 1 bonus)
+    // Questions 1-5: Round 1
+    // Question 6: Round 1, bonus
+    // Questions 7-11: Round 2
+    // Question 12: Round 2, bonus
+    // etc.
+    // Use nextOrder (which is 0-indexed for the new question's position)
+    const questionIndex = nextOrder;
+    
+    // Determine if this should be a bonus question (every 6th question, 1-indexed)
+    if ((questionIndex + 1) % 6 === 0) {
+      // This is a bonus question
+      isBonus = true;
+      roundNumber = Math.floor(questionIndex / 6) + 1;
+    } else {
+      // This is a regular question
+      isBonus = false;
+      roundNumber = Math.floor(questionIndex / 6) + 1;
+    }
+  }
   
   const insertData: Record<string, unknown> = {
     text: q.text,
@@ -223,6 +285,14 @@ export async function addQuestion(gameId: string, q: QuestionInput) {
   }
   if (q.hasWager && q.maxWager !== undefined) {
     insertData.max_wager = q.maxWager;
+  }
+  
+  // Set round fields (for wager games - use auto-calculated values if not provided)
+  if (roundNumber !== undefined && roundNumber !== null) {
+    insertData.round_number = roundNumber;
+  }
+  if (isBonus !== undefined) {
+    insertData.is_bonus = isBonus;
   }
   
   const { data, error } = await supabase
@@ -280,6 +350,14 @@ export async function updateQuestion(questionId: string, q: QuestionInput) {
   } else if (!q.hasWager) {
     // Clear max_wager if wagering is disabled
     updateData.max_wager = null;
+  }
+  
+  // Set round fields if provided (for wager games)
+  if (q.roundNumber !== undefined) {
+    updateData.round_number = q.roundNumber;
+  }
+  if (q.isBonus !== undefined) {
+    updateData.is_bonus = q.isBonus;
   }
   
   const { data, error } = await supabase
@@ -434,7 +512,7 @@ export async function getGame(code: string) {
     // For now, keep full fetch but this is where we'd add selective fetching if needed
     const { data, error } = await supabase
       .from("player_answers")
-      .select("id, player_id, question_id, answer_index, text_answer, is_correct, points_earned, manually_scored, wager, created_at")
+      .select("id, player_id, question_id, answer_index, text_answer, is_correct, points_earned, manually_scored, wager, wager_slot, player_round, created_at")
       .in("player_id", playerIds)
       .order("created_at", { ascending: false });
     
@@ -452,10 +530,18 @@ export async function getGame(code: string) {
     .eq("game_id", game.id)
     .order("score", { ascending: false });
 
+  // Sort questions by question_order first (same as returned to client)
+  const sortedQuestions = (game.questions || [])
+    .sort((a: any, b: any) => {
+      const orderA = a.question_order !== null && a.question_order !== undefined ? a.question_order : 999999;
+      const orderB = b.question_order !== null && b.question_order !== undefined ? b.question_order : 999999;
+      return orderA - orderB;
+    });
+
   // Calculate time remaining for current question (server-side timer)
   let timeRemaining: number | null = null;
   if (game.current_question_index !== null && game.current_question_index !== undefined) {
-    const currentQuestion = (game.questions || [])[game.current_question_index];
+    const currentQuestion = sortedQuestions[game.current_question_index];
     if (currentQuestion && currentQuestion.has_timer && currentQuestion.timer_seconds && game.question_start_time) {
       const startTime = new Date(game.question_start_time).getTime();
       const now = Date.now();
@@ -486,17 +572,15 @@ export async function getGame(code: string) {
     gameEnded: game.game_ended || false,
     timeRemaining: timeRemaining,
     questionStartTime: game.question_start_time || null, // Include for client-side calculation if needed
-    questions: (game.questions || [])
-      .sort((a: any, b: any) => {
-        // Sort by question_order field if available, otherwise by id as fallback
-        const orderA = a.question_order !== null && a.question_order !== undefined ? a.question_order : 999999;
-        const orderB = b.question_order !== null && b.question_order !== undefined ? b.question_order : 999999;
-        return orderA - orderB;
-      })
+    gameType: (game.game_type as 'traditional' | 'wager') || 'traditional',
+    wagerAmounts: game.wager_amounts || [2, 4, 6, 8, 10],
+    bonusMaxWager: game.bonus_max_wager || 20,
+    questions: sortedQuestions
       .map((q: any) => ({
         id: q.id,
         text: q.text,
-        choices: q.choices,
+        // Ensure true/false questions always have choices set
+        choices: q.is_true_false ? (q.choices && q.choices.length > 0 ? q.choices : ["True", "False"]) : q.choices,
         answer: q.answer,
         points: q.points,
         multiplier: q.multiplier || 1,
@@ -509,6 +593,8 @@ export async function getGame(code: string) {
         fillInBlankAnswer: q.fill_in_blank_answer || null,
         hasWager: q.has_wager || false,
         maxWager: q.max_wager || null,
+        roundNumber: q.round_number || null,
+        isBonus: q.is_bonus || false,
       })),
     players: (playersWithScores || []).map((p: DatabasePlayer) => ({
       id: p.id,
@@ -525,6 +611,8 @@ export async function getGame(code: string) {
       pointsEarned: pa.points_earned,
       manuallyScored: pa.manually_scored || false,
       wager: pa.wager || null,
+      wagerSlot: pa.wager_slot || null,
+      playerRound: pa.player_round || null,
     })),
   };
 }
@@ -560,7 +648,7 @@ export async function activateQuestion(gameId: string, questionIndex: number) {
   if (error) throw new Error(error.message);
 }
 
-export async function submitAnswer(playerId: string, questionId: string, answerIndex: number | null, textAnswer?: string, wager?: number) {
+export async function submitAnswer(playerId: string, questionId: string, answerIndex: number | null, textAnswer?: string, wager?: number, wagerSlot?: number | null, playerRound?: number | null) {
   const supabase = getSupabaseClient();
   // Verify player exists
   const { data: player, error: playerError } = await supabase
@@ -572,6 +660,13 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
   if (playerError || !player) {
     throw new Error("Player not found. Please rejoin the game.");
   }
+
+  // Get question to determine round info for wager games
+  const { data: question } = await supabase
+    .from("questions")
+    .select("round_number, is_bonus, game_id")
+    .eq("id", questionId)
+    .single();
 
   // Check if answer already submitted
   const { data: existing } = await supabase
@@ -587,6 +682,8 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
     if (answerIndex !== null) updateData.answer_index = answerIndex;
     if (textAnswer !== undefined) updateData.text_answer = textAnswer;
     if (wager !== undefined) updateData.wager = wager;
+    if (wagerSlot !== undefined) updateData.wager_slot = wagerSlot;
+    if (playerRound !== undefined) updateData.player_round = playerRound;
     
     const { error } = await supabase
       .from("player_answers")
@@ -594,6 +691,12 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
       .eq("id", existing.id);
     
     if (error) throw new Error(error.message);
+    
+    // Update used slots for wager games
+    if (wagerSlot !== null && wagerSlot !== undefined && question && question.round_number) {
+      await updatePlayerWagerSlots(playerId, question.game_id, question.round_number, wagerSlot);
+    }
+    
     return;
   }
 
@@ -605,6 +708,8 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
   if (answerIndex !== null) insertData.answer_index = answerIndex;
   if (textAnswer !== undefined) insertData.text_answer = textAnswer;
   if (wager !== undefined) insertData.wager = wager;
+  if (wagerSlot !== undefined) insertData.wager_slot = wagerSlot;
+  if (playerRound !== undefined) insertData.player_round = playerRound;
   
   const { error } = await supabase
     .from("player_answers")
@@ -612,18 +717,55 @@ export async function submitAnswer(playerId: string, questionId: string, answerI
   
   if (error) throw new Error(error.message);
   
-  // Update game activity when player submits answer
-  const { data: question } = await supabase
-    .from("questions")
-    .select("game_id")
-    .eq("id", questionId)
-    .single();
+  // Update used slots for wager games
+  if (wagerSlot !== null && wagerSlot !== undefined && question && question.round_number) {
+    await updatePlayerWagerSlots(playerId, question.game_id, question.round_number, wagerSlot);
+  }
   
+  // Update game activity when player submits answer
   if (question) {
     await supabase
       .from("games")
       .update({ last_activity: new Date().toISOString() })
       .eq("id", question.game_id);
+  }
+}
+
+async function updatePlayerWagerSlots(playerId: string, gameId: string, roundNumber: number, slot: number) {
+  const supabase = getSupabaseClient();
+  
+  // Get or create player wager slots record
+  const { data: existing } = await supabase
+    .from("player_wager_slots")
+    .select("*")
+    .eq("player_id", playerId)
+    .eq("game_id", gameId)
+    .eq("round_number", roundNumber)
+    .single();
+  
+  if (existing) {
+    // Update existing record - add slot to used_slots array if not already present
+    const usedSlots = existing.used_slots || [];
+    if (!usedSlots.includes(slot)) {
+      const { error } = await supabase
+        .from("player_wager_slots")
+        .update({ used_slots: [...usedSlots, slot] })
+        .eq("id", existing.id);
+      
+      if (error) throw new Error(error.message);
+    }
+  } else {
+    // Create new record
+    const { error } = await supabase
+      .from("player_wager_slots")
+      .insert({
+        player_id: playerId,
+        game_id: gameId,
+        round_number: roundNumber,
+        used_slots: [slot]
+      });
+    
+    if (error) throw new Error(error.message);
   }
 }
 
@@ -637,6 +779,15 @@ export async function revealAnswers(gameId: string, questionId: string) {
     .single();
 
   if (!question) throw new Error("Question not found");
+
+  // Get game to check game type
+  const { data: game } = await supabase
+    .from("games")
+    .select("game_type, wager_amounts")
+    .eq("id", gameId)
+    .single();
+
+  const isWagerGame = game?.game_type === 'wager';
 
   // Get all player answers for this question
   const { data: answers } = await supabase
@@ -660,6 +811,7 @@ export async function revealAnswers(gameId: string, questionId: string) {
   // For fill-in-the-blank questions, don't auto-score - host has already scored manually
   // IMPORTANT: Do NOT update is_correct or points_earned for fill-in-the-blank questions
   // These values were already set by manuallyAwardPoints and must be preserved
+  // True/false questions are handled the same as multiple choice (they use answer_index: 0 for True, 1 for False)
   if (question.is_fill_in_blank) {
     // For fill-in-the-blank questions, we need to ensure manually scored answers preserve their status
     // We explicitly do NOT update is_correct or points_earned for manually_scored answers
@@ -686,24 +838,46 @@ export async function revealAnswers(gameId: string, questionId: string) {
     for (const answer of answers) {
       const basePointsEarned = answer.points_earned || 0;
       const isCorrect = answer.is_correct || false;
-      const wagerAmount = answer.wager || 0;
-      const basePoints = question.points * (question.multiplier || 1);
       
-      // Calculate final points earned based on wagering
+      // Calculate final points earned based on game type
       let finalPointsEarned = 0;
-      if (question.has_wager && wagerAmount > 0) {
-        // If wagering is enabled and player wagered
-        if (isCorrect) {
-          // Player gains the wager amount PLUS the base points awarded by host
-          // Note: basePointsEarned already includes multiplier, so we use it directly
-          finalPointsEarned = wagerAmount + basePointsEarned;
+      
+      if (isWagerGame) {
+        // For wager games, use wager_slot for regular questions or wager for bonus questions
+        if (question.is_bonus) {
+          // Bonus question: use wager amount (negative if incorrect)
+          const bonusWager = answer.wager || 0;
+          if (isCorrect) {
+            finalPointsEarned = bonusWager;
+          } else {
+            finalPointsEarned = -bonusWager;
+          }
         } else {
-          // Player loses the wager amount (negative)
-          finalPointsEarned = -wagerAmount;
+          // Regular question: use wager_slot value as the points (0 if incorrect, no penalty)
+          const slotValue = answer.wager_slot || 0;
+          if (isCorrect) {
+            finalPointsEarned = slotValue;
+          } else {
+            finalPointsEarned = 0; // No penalty for incorrect regular questions
+          }
         }
       } else {
-        // Normal scoring without wagering - use the points awarded by host
-        finalPointsEarned = basePointsEarned;
+        // Traditional game scoring
+        const wagerAmount = answer.wager || 0;
+        if (question.has_wager && wagerAmount > 0) {
+          // If wagering is enabled and player wagered
+          if (isCorrect) {
+            // Player gains the wager amount PLUS the base points awarded by host
+            // Note: basePointsEarned already includes multiplier, so we use it directly
+            finalPointsEarned = wagerAmount + basePointsEarned;
+          } else {
+            // Player loses the wager amount (negative)
+            finalPointsEarned = -wagerAmount;
+          }
+        } else {
+          // Normal scoring without wagering - use the points awarded by host
+          finalPointsEarned = basePointsEarned;
+        }
       }
       
       // Get current player score
@@ -747,31 +921,56 @@ export async function revealAnswers(gameId: string, questionId: string) {
     return;
   }
 
-  // Calculate scores and update player answers (for multiple choice)
+  // Calculate scores and update player answers (for multiple choice and true/false questions)
+  // True/false questions use answer_index: 0 for True, 1 for False, same as multiple choice
   for (const answer of answers) {
-    // Skip answers that have been manually scored (shouldn't happen for multiple choice, but just in case)
+    // Skip answers that have been manually scored (shouldn't happen for multiple choice or true/false, but just in case)
     if (answer.manually_scored) {
       continue;
     }
 
     const isCorrect = answer.answer_index === question.answer;
-    const wagerAmount = answer.wager || 0;
-    const basePoints = question.points * (question.multiplier || 1);
     
-    // Calculate points earned based on wagering
+    // Calculate points earned based on game type
     let pointsEarned = 0;
-    if (question.has_wager && wagerAmount > 0) {
-      // If wagering is enabled and player wagered
-      if (isCorrect) {
-        // Player gains the wager amount PLUS the normal points
-        pointsEarned = wagerAmount + basePoints;
+    
+    if (isWagerGame) {
+      // For wager games, use wager_slot for regular questions or wager for bonus questions
+      if (question.is_bonus) {
+        // Bonus question: use wager amount (negative if incorrect)
+        const bonusWager = answer.wager || 0;
+        if (isCorrect) {
+          pointsEarned = bonusWager;
+        } else {
+          pointsEarned = -bonusWager;
+        }
       } else {
-        // Player loses the wager amount (negative)
-        pointsEarned = -wagerAmount;
+        // Regular question: use wager_slot value as the points (0 if incorrect, no penalty)
+        const slotValue = answer.wager_slot || 0;
+        if (isCorrect) {
+          pointsEarned = slotValue;
+        } else {
+          pointsEarned = 0; // No penalty for incorrect regular questions
+        }
       }
     } else {
-      // Normal scoring without wagering
-      pointsEarned = isCorrect ? basePoints : 0;
+      // Traditional game scoring
+      const wagerAmount = answer.wager || 0;
+      const basePoints = question.points * (question.multiplier || 1);
+      
+      if (question.has_wager && wagerAmount > 0) {
+        // If wagering is enabled and player wagered
+        if (isCorrect) {
+          // Player gains the wager amount PLUS the normal points
+          pointsEarned = wagerAmount + basePoints;
+        } else {
+          // Player loses the wager amount (negative)
+          pointsEarned = -wagerAmount;
+        }
+      } else {
+        // Normal scoring without wagering
+        pointsEarned = isCorrect ? basePoints : 0;
+      }
     }
 
     // Get current player score
@@ -965,6 +1164,17 @@ export async function resetGame(gameId: string) {
       console.error("Error deleting player answers:", deleteError);
       // Continue anyway - game reset should still proceed
     }
+  }
+
+  // Delete all player wager slots for this game
+  const { error: wagerSlotsError } = await supabase
+    .from("player_wager_slots")
+    .delete()
+    .eq("game_id", gameId);
+  
+  if (wagerSlotsError) {
+    console.error("Error deleting player wager slots:", wagerSlotsError);
+    // Continue anyway - game reset should still proceed
   }
 
   // Reset game state

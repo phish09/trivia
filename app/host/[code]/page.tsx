@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useParams } from "next/navigation";
-import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, deleteQuestion, exportQuestions, importQuestions } from "../../actions";
+import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, deleteQuestion, exportQuestions, importQuestions, updateGameSettings } from "../../actions";
 import { useRouter } from "next/navigation";
 import { useConfetti } from "@/hooks/useConfetti";
 import { useTimer } from "@/hooks/useTimer";
@@ -46,6 +46,8 @@ function HostGameContent() {
   const [editFillInBlankAnswer, setEditFillInBlankAnswer] = useState("");
   const [editHasWager, setEditHasWager] = useState(false);
   const [editMaxWager, setEditMaxWager] = useState(10);
+  const [editRoundNumber, setEditRoundNumber] = useState<number | null>(null);
+  const [editIsBonus, setEditIsBonus] = useState(false);
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -64,6 +66,8 @@ function HostGameContent() {
   const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | 'delete' | 'kick' | null>(null);
   const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
   const [playerToKick, setPlayerToKick] = useState<{id: string, username: string} | null>(null);
+  const [showRoundLimitModal, setShowRoundLimitModal] = useState(false);
+  const [roundLimitMessage, setRoundLimitMessage] = useState("");
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
   const [showPlayUrlCopiedTooltip, setShowPlayUrlCopiedTooltip] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -71,6 +75,9 @@ function HostGameContent() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{success: boolean, message: string} | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [editingWagerSettings, setEditingWagerSettings] = useState(false);
+  const [wagerAmounts, setWagerAmounts] = useState<number[]>([2, 4, 6, 8, 10]);
+  const [bonusMaxWager, setBonusMaxWager] = useState<number>(20);
 
   // Timer countdown logic - using server-provided time
   const timeRemaining = useTimer({
@@ -88,8 +95,66 @@ function HostGameContent() {
     previousGameEndedRef.current = isGameEnded;
   }, [isGameEnded]);
 
+  // Initialize wager settings from game
+  useEffect(() => {
+    if (game?.gameType === 'wager') {
+      setWagerAmounts(game.wagerAmounts || [2, 4, 6, 8, 10]);
+      setBonusMaxWager(game.bonusMaxWager || 20);
+    }
+  }, [game]);
+
+  function handleWagerAmountChange(index: number, value: string) {
+    const numValue = parseInt(value) || 0;
+    const newAmounts = [...wagerAmounts];
+    newAmounts[index] = Math.max(0, numValue);
+    setWagerAmounts(newAmounts);
+  }
+
+  async function handleSaveWagerSettings() {
+    if (!game) return;
+    try {
+      await updateGameSettings(game.id, wagerAmounts, bonusMaxWager);
+      setEditingWagerSettings(false);
+      loadGame();
+    } catch (error) {
+      console.error("Failed to update wager settings:", error);
+      alert("Failed to update wager settings. Please try again.");
+    }
+  }
+
   async function handleAddQuestion(question: QuestionInput) {
     if (!game) return;
+    
+    // Validate round limits for wager games
+    if (game.gameType === 'wager') {
+      // Determine which round this question will be assigned to
+      let targetRound: number;
+      
+      if (question.roundNumber !== undefined && question.roundNumber !== null) {
+        // Round explicitly provided
+        targetRound = question.roundNumber;
+      } else {
+        // Auto-calculate round based on question order
+        const existingQuestions = game.questions || [];
+        const nextOrder = existingQuestions.length;
+        // Calculate round: every 6 questions is a round (5 regular + 1 bonus)
+        targetRound = Math.floor(nextOrder / 6) + 1;
+      }
+      
+      // If this is NOT a bonus question, check if round already has 5 regular questions
+      if (!question.isBonus) {
+        const regularQuestionsInRound = (game.questions || []).filter(
+          (q: any) => q.roundNumber === targetRound && !q.isBonus
+        );
+        
+      if (regularQuestionsInRound.length >= 5) {
+        setRoundLimitMessage(`Round ${targetRound} already has 5 regular questions. Please add a bonus question or create a new round.`);
+        setShowRoundLimitModal(true);
+        return;
+      }
+      }
+    }
+    
     await addQuestion(game.id, question);
     loadGame();
   }
@@ -113,6 +178,8 @@ function HostGameContent() {
     setEditFillInBlankAnswer(question.fillInBlankAnswer || "");
     setEditHasWager(question.hasWager || false);
     setEditMaxWager(question.maxWager || 10);
+    setEditRoundNumber(question.roundNumber || null);
+    setEditIsBonus(question.isBonus || false);
   }
 
   function handleCancelEdit() {
@@ -129,11 +196,28 @@ function HostGameContent() {
     setEditFillInBlankAnswer("");
     setEditHasWager(false);
     setEditMaxWager(10);
+    setEditRoundNumber(null);
+    setEditIsBonus(false);
   }
 
   async function handleSaveEdit() {
     if (!editingQuestionId || !editQuestionText || !game) return;
     if (!editIsFillInBlank && !editIsTrueFalse && editChoices.some((c) => !c)) return;
+    
+    // Validate round limits for wager games when editing
+    if (game.gameType === 'wager' && !editIsBonus && editRoundNumber !== null && editRoundNumber !== undefined) {
+      // Check if this round already has 5 regular questions (excluding the current question being edited)
+      const regularQuestionsInRound = (game.questions || []).filter(
+        (q: any) => q.roundNumber === editRoundNumber && !q.isBonus && q.id !== editingQuestionId
+      );
+      
+      if (regularQuestionsInRound.length >= 5) {
+        setRoundLimitMessage(`Round ${editRoundNumber} already has 5 regular questions. Please mark this as a bonus question or change the round number.`);
+        setShowRoundLimitModal(true);
+        return;
+      }
+    }
+    
     try {
       await updateQuestion(editingQuestionId, {
         text: editQuestionText,
@@ -148,6 +232,8 @@ function HostGameContent() {
         fillInBlankAnswer: editIsFillInBlank ? editFillInBlankAnswer : undefined,
         hasWager: editHasWager,
         maxWager: editHasWager ? editMaxWager : undefined,
+        roundNumber: editRoundNumber,
+        isBonus: editIsBonus,
       });
       handleCancelEdit();
       loadGame();
@@ -275,10 +361,35 @@ function HostGameContent() {
       return;
     }
 
+    const draggedQuestion = game.questions[draggedIndex];
+    const dropQuestion = game.questions[dropIndex];
+
+    // For wager games, restrict reordering to within the same round
+    if (game.gameType === 'wager') {
+      // Both questions must have the same round number
+      const draggedRound = draggedQuestion.roundNumber;
+      const dropRound = dropQuestion.roundNumber;
+      
+      // Allow if both are in the same round, or if either is unassigned (null)
+      // But prevent mixing assigned and unassigned questions
+      if (draggedRound !== null && dropRound !== null && draggedRound !== dropRound) {
+        alert("Questions can only be reordered within the same round. Please assign questions to rounds first.");
+        setDraggedQuestionId(null);
+        return;
+      }
+      
+      // Prevent moving bonus questions into regular question positions and vice versa
+      if (draggedQuestion.isBonus !== dropQuestion.isBonus) {
+        alert("Bonus questions and regular questions cannot be mixed. Please keep them in their respective sections.");
+        setDraggedQuestionId(null);
+        return;
+      }
+    }
+
     // Create new ordered array
     const newQuestions = [...game.questions];
-    const [draggedQuestion] = newQuestions.splice(draggedIndex, 1);
-    newQuestions.splice(dropIndex, 0, draggedQuestion);
+    const [removedQuestion] = newQuestions.splice(draggedIndex, 1);
+    newQuestions.splice(dropIndex, 0, removedQuestion);
 
     // Update order in database
     try {
@@ -321,6 +432,9 @@ function HostGameContent() {
   async function autoSavePlayerScore(playerId: string, questionId: string) {
     if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) return;
     
+    const currentQuestion = game.questions[game.currentQuestionIndex];
+    if (!currentQuestion) return;
+    
     // Clear any existing timeout for this player
     if (saveTimeoutsRef.current[playerId]) {
       clearTimeout(saveTimeoutsRef.current[playerId]);
@@ -331,13 +445,40 @@ function HostGameContent() {
 
     // Debounce the save operation by 500ms
     saveTimeoutsRef.current[playerId] = setTimeout(async () => {
-      const pointsInput = document.getElementById(`points-${playerId}`) as HTMLInputElement;
       const correctCheckbox = document.getElementById(`correct-${playerId}`) as HTMLInputElement;
-      
-      if (!pointsInput || !correctCheckbox) return;
+      if (!correctCheckbox) return;
 
-      const points = Number(pointsInput.value) || 0;
       const isCorrect = correctCheckbox.checked;
+      let points = 0;
+
+      // For wager games with fill-in-the-blank, calculate points based on wager rules
+      if (game.gameType === 'wager' && currentQuestion.isFillInBlank) {
+        const playerAnswer = game.playerAnswers?.find(
+          (pa: any) => pa.playerId === playerId && pa.questionId === questionId
+        );
+        
+        if (isCorrect) {
+          if (currentQuestion.isBonus) {
+            // Bonus question: use wager amount
+            points = playerAnswer?.wager || 0;
+          } else {
+            // Regular question: use wager_slot value
+            points = playerAnswer?.wagerSlot || 0;
+          }
+        } else {
+          // Incorrect: 0 for regular, -wager for bonus
+          if (currentQuestion.isBonus) {
+            points = -(playerAnswer?.wager || 0);
+          } else {
+            points = 0;
+          }
+        }
+      } else {
+        // Traditional game: read from points input
+        const pointsInput = document.getElementById(`points-${playerId}`) as HTMLInputElement;
+        if (!pointsInput) return;
+        points = Number(pointsInput.value) || 0;
+      }
 
       try {
         await manuallyAwardPoints(playerId, questionId, points, isCorrect);
@@ -811,6 +952,94 @@ function HostGameContent() {
             
           </div>
 
+      {/* Wager Settings (only for wager games) */}
+      {game.gameType === 'wager' && (
+        <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold text-slate-800">Wager Settings</h2>
+            </div>
+            {!editingWagerSettings && (
+              <button
+                onClick={() => setEditingWagerSettings(true)}
+                className="px-4 py-1 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors border border-gray-800 border-b-4"
+              >
+                Edit
+              </button>
+            )}
+          </div>
+          {editingWagerSettings ? (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Wager amounts (5 values)
+                </label>
+                <div className="grid grid-cols-5 gap-2">
+                  {wagerAmounts.map((amount, index) => (
+                    <input
+                      key={index}
+                      type="number"
+                      min="0"
+                      className="w-full px-3 py-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all text-center"
+                      value={amount}
+                      onChange={(e) => handleWagerAmountChange(index, e.target.value)}
+                    />
+                  ))}
+                </div>
+                <p className="text-xs text-slate-500 mt-1">
+                  These are the point slots players can choose from for each regular question.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  Bonus max wager
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                  value={bonusMaxWager}
+                  onChange={(e) => setBonusMaxWager(Math.max(0, parseInt(e.target.value) || 0))}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Maximum points players can wager on bonus questions.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveWagerSettings}
+                  className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:bg-emerald-600 transition-colors border border-emerald-900 border-b-4"
+                >
+                  Save
+                </button>
+                <button
+                  onClick={() => {
+                    setEditingWagerSettings(false);
+                    // Reset to game values
+                    if (game) {
+                      setWagerAmounts(game.wagerAmounts || [2, 4, 6, 8, 10]);
+                      setBonusMaxWager(game.bonusMaxWager || 20);
+                    }
+                  }}
+                  className="px-4 py-2 bg-slate-300 text-slate-700 rounded-xl hover:bg-slate-400 transition-colors border border-gray-800 border-b-4"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-slate-600">
+                <span className="font-semibold">Wager amounts:</span> {wagerAmounts.join(', ')} points
+              </p>
+              <p className="text-sm text-slate-600">
+                <span className="font-semibold">Bonus max wager:</span> {bonusMaxWager} points
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       <GameControls
         game={game}
         currentQuestion={currentQuestion}
@@ -880,6 +1109,7 @@ function HostGameContent() {
         onSubmit={handleAddQuestion}
         minimized={minimizedSections.addQuestion}
         onToggleMinimize={() => toggleSection('addQuestion')}
+        gameType={game.gameType}
       />
 
       <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
@@ -934,6 +1164,7 @@ function HostGameContent() {
             editingQuestionId={editingQuestionId}
             draggedQuestionId={draggedQuestionId}
             dragOverIndex={dragOverIndex}
+            gameType={game.gameType}
             editQuestionText={editQuestionText}
             editChoices={editChoices}
             editAnswer={editAnswer}
@@ -946,6 +1177,8 @@ function HostGameContent() {
             editFillInBlankAnswer={editFillInBlankAnswer}
             editHasWager={editHasWager}
             editMaxWager={editMaxWager}
+            editRoundNumber={editRoundNumber}
+            editIsBonus={editIsBonus}
             onStartEdit={handleStartEdit}
             onSaveEdit={handleSaveEdit}
             onCancelEdit={handleCancelEdit}
@@ -967,6 +1200,8 @@ function HostGameContent() {
             setEditFillInBlankAnswer={setEditFillInBlankAnswer}
             setEditHasWager={setEditHasWager}
             setEditMaxWager={setEditMaxWager}
+            setEditRoundNumber={setEditRoundNumber}
+            setEditIsBonus={setEditIsBonus}
           />
         )}
       </div>
@@ -1023,6 +1258,19 @@ function HostGameContent() {
           setQuestionToDelete(null);
           setPlayerToKick(null);
         }}
+        showCloseButton={true}
+      />
+
+      {/* Round Limit Error Modal */}
+      <Modal
+        isOpen={showRoundLimitModal}
+        onClose={() => {
+          setShowRoundLimitModal(false);
+          setRoundLimitMessage("");
+        }}
+        title="Round Limit Reached"
+        message={roundLimitMessage}
+        buttonText="OK"
         showCloseButton={true}
       />
 

@@ -14,6 +14,7 @@ interface Question {
   hasTimer?: boolean;
   timerSeconds?: number | null;
   fillInBlankAnswer?: string | null;
+  isBonus?: boolean;
 }
 
 interface Player {
@@ -28,6 +29,8 @@ interface PlayerAnswer {
   textAnswer: string | null;
   isCorrect: boolean | null;
   pointsEarned: number | null;
+  wager?: number | null;
+  wagerSlot?: number | null;
 }
 
 interface GameControlsProps {
@@ -37,6 +40,7 @@ interface GameControlsProps {
     answersRevealed: boolean;
     players: Player[];
     playerAnswers?: PlayerAnswer[];
+    gameType?: 'traditional' | 'wager';
   };
   currentQuestion: Question | null;
   timeRemaining: number | null;
@@ -237,11 +241,38 @@ export default function GameControls({
                                   className="w-4 h-4 text-green-600 border-2 border-slate-300 rounded focus:ring-2 focus:ring-green-500"
                                   id={`correct-${player.id}`}
                                   onChange={(e) => {
-                                    const pointsInput = document.getElementById(`points-${player.id}`) as HTMLInputElement;
-                                    const maxPoints = currentQuestion.points * (currentQuestion.multiplier || 1);
-                                    if (e.target.checked && pointsInput) {
-                                      // Auto-fill max points when checked
-                                      pointsInput.value = maxPoints.toString();
+                                    // For wager games, calculate points based on wager rules
+                                    if (game.gameType === 'wager') {
+                                      let calculatedPoints = 0;
+                                      if (e.target.checked) {
+                                        if (currentQuestion.isBonus) {
+                                          // Bonus question: use wager amount
+                                          calculatedPoints = playerAnswer.wager || 0;
+                                        } else {
+                                          // Regular question: use wager_slot value
+                                          calculatedPoints = playerAnswer.wagerSlot || 0;
+                                        }
+                                      } else {
+                                        // Incorrect: 0 for regular, -wager for bonus
+                                        if (currentQuestion.isBonus) {
+                                          calculatedPoints = -(playerAnswer.wager || 0);
+                                        } else {
+                                          calculatedPoints = 0;
+                                        }
+                                      }
+                                      // Set a hidden input or directly call the save function with calculated points
+                                      // For now, we'll update via the points input if it exists
+                                      const pointsInput = document.getElementById(`points-${player.id}`) as HTMLInputElement;
+                                      if (pointsInput) {
+                                        pointsInput.value = calculatedPoints.toString();
+                                      }
+                                    } else {
+                                      // Traditional game: auto-fill max points when checked
+                                      const pointsInput = document.getElementById(`points-${player.id}`) as HTMLInputElement;
+                                      const maxPoints = currentQuestion.points * (currentQuestion.multiplier || 1);
+                                      if (e.target.checked && pointsInput) {
+                                        pointsInput.value = maxPoints.toString();
+                                      }
                                     }
                                     // Auto-save when checkbox changes
                                     onAutoSavePlayerScore(player.id, currentQuestion.id);
@@ -249,27 +280,44 @@ export default function GameControls({
                                 />
                                 <span className="text-xs font-medium text-slate-700">Correct</span>
                               </label>
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={currentQuestion.points * (currentQuestion.multiplier || 1)}
-                                  defaultValue={playerAnswer.pointsEarned || 0}
-                                  className="w-16 px-2 py-1 border border-slate-500 bg-white rounded text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
-                                  id={`points-${player.id}`}
-                                  onChange={(e) => {
-                                    const maxPoints = currentQuestion.points * (currentQuestion.multiplier || 1);
-                                    const inputValue = Number(e.target.value);
-                                    // Clamp to max if value exceeds max
-                                    if (inputValue > maxPoints) {
-                                      e.target.value = maxPoints.toString();
+                              {game.gameType !== 'wager' && (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={currentQuestion.points * (currentQuestion.multiplier || 1)}
+                                    defaultValue={playerAnswer.pointsEarned || 0}
+                                    className="w-16 px-2 py-1 border border-slate-500 bg-white rounded text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none"
+                                    id={`points-${player.id}`}
+                                    onChange={(e) => {
+                                      const maxPoints = currentQuestion.points * (currentQuestion.multiplier || 1);
+                                      const inputValue = Number(e.target.value);
+                                      // Clamp to max if value exceeds max
+                                      if (inputValue > maxPoints) {
+                                        e.target.value = maxPoints.toString();
+                                      }
+                                      // Auto-save when points change
+                                      onAutoSavePlayerScore(player.id, currentQuestion.id);
+                                    }}
+                                  />
+                                  <span className="text-xs text-slate-500">pts</span>
+                                </div>
+                              )}
+                              {game.gameType === 'wager' && (
+                                <>
+                                  <input
+                                    type="hidden"
+                                    id={`points-${player.id}`}
+                                    defaultValue={playerAnswer.pointsEarned || 0}
+                                  />
+                                  <span className="text-xs text-slate-500">
+                                    {currentQuestion.isBonus 
+                                      ? `Wager: ${playerAnswer.wager || 0} pts`
+                                      : `Slot: ${playerAnswer.wagerSlot || 0} pts`
                                     }
-                                    // Auto-save when points change
-                                    onAutoSavePlayerScore(player.id, currentQuestion.id);
-                                  }}
-                                />
-                                <span className="text-xs text-slate-500">pts</span>
-                              </div>
+                                  </span>
+                                </>
+                              )}
                               {savingStatus[player.id] === 'saving' && (
                                 <span className="text-xs text-blue-600">Saving...</span>
                               )}

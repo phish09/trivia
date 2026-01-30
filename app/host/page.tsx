@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { createGame } from "../actions";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -8,17 +8,48 @@ import Link from "next/link";
 export default function HostPage() {
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
+  const [gameType, setGameType] = useState<'traditional' | 'wager'>('traditional');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [existingCode, setExistingCode] = useState("");
+  const [showGameTypeDropdown, setShowGameTypeDropdown] = useState(false);
+  const gameTypeDropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  // Close dropdown when clicking outside or pressing Escape
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (gameTypeDropdownRef.current && !gameTypeDropdownRef.current.contains(event.target as Node)) {
+        setShowGameTypeDropdown(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showGameTypeDropdown) {
+        setShowGameTypeDropdown(false);
+      }
+    };
+
+    if (showGameTypeDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      };
+    }
+  }, [showGameTypeDropdown]);
 
   async function handleCreate() {
     if (!name) return;
     setError(null);
     setLoading(true);
     try {
-      const game = await createGame(name, password.trim() || undefined);
+      const game = await createGame(
+        name, 
+        password.trim() || undefined,
+        gameType
+      );
       // Store password in sessionStorage for this game
       if (password.trim()) {
         sessionStorage.setItem(`host_password_${game.code}`, password.trim());
@@ -77,6 +108,66 @@ export default function HostPage() {
                 disabled={loading}
                 onKeyDown={(e) => e.key === 'Enter' && !loading && handleCreate()}
               />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Game type
+              </label>
+              <div className="relative" ref={gameTypeDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowGameTypeDropdown(!showGameTypeDropdown)}
+                  disabled={loading}
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl bg-white font-medium text-slate-700 hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none transition-all flex items-center justify-between gap-2 text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="truncate">
+                    {gameType === 'traditional' ? 'Traditional Trivia' : 'Wager Trivia'}
+                  </span>
+                  <svg 
+                    className={`w-5 h-5 text-slate-500 flex-shrink-0 transition-transform ${showGameTypeDropdown ? 'rotate-180' : ''}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {showGameTypeDropdown && (
+                  <div className="absolute z-50 mt-2 w-full bg-white rounded-xl shadow-2xl border-2 border-slate-200">
+                    <div className="p-2 space-y-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGameType('traditional');
+                          setShowGameTypeDropdown(false);
+                        }}
+                        className={`w-full text-left px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-primary/10 hover:to-secondary/10 hover:border-primary/30 border-2 transition-all ${
+                          gameType === 'traditional' ? 'bg-primary/10 border-primary/30' : 'border-transparent'
+                        }`}
+                      >
+                        <div className="font-semibold text-slate-800">Traditional Trivia</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGameType('wager');
+                          setShowGameTypeDropdown(false);
+                        }}
+                        className={`w-full text-left px-4 py-3 rounded-lg hover:bg-gradient-to-r hover:from-primary/10 hover:to-secondary/10 hover:border-primary/30 border-2 transition-all ${
+                          gameType === 'wager' ? 'bg-primary/10 border-primary/30' : 'border-transparent'
+                        }`}
+                      >
+                        <div className="font-semibold text-slate-800">Wager Trivia</div>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-slate-600 mt-2">
+                {gameType === 'traditional' 
+                  ? "Host sets points for each question. Players earn points based on correct answers."
+                  : "5 rounds of questions with optional bonus rounds. Players choose point slots (2, 4, 6, 8, 10) for each question, using each slot once per round."}
+              </p>
             </div>
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">

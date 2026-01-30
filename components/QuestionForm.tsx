@@ -8,9 +8,10 @@ interface QuestionFormProps {
   onSubmit: (question: QuestionInput) => Promise<void>;
   minimized?: boolean;
   onToggleMinimize?: () => void;
+  gameType?: 'traditional' | 'wager';
 }
 
-export default function QuestionForm({ onSubmit, minimized = false, onToggleMinimize }: QuestionFormProps) {
+export default function QuestionForm({ onSubmit, minimized = false, onToggleMinimize, gameType = 'traditional' }: QuestionFormProps) {
   const [questionText, setQuestionText] = useState("");
   const [choices, setChoices] = useState(["", "", "", ""]);
   const [answer, setAnswer] = useState(0);
@@ -198,31 +199,40 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
                 </div>
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-4">
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Points</label>
-                <input
-                  type="number"
-                  className="w-24 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
-                  value={points}
-                  onChange={(e) => setPoints(Number(e.target.value))}
-                  min="1"
-                />
+            {gameType === 'traditional' && (
+              <div className="flex flex-wrap items-center gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Points</label>
+                  <input
+                    type="number"
+                    className="w-24 px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
+                    value={points}
+                    onChange={(e) => setPoints(Number(e.target.value))}
+                    min="1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Multiplier</label>
+                  <select
+                    className="px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all bg-white"
+                    value={multiplier}
+                    onChange={(e) => setMultiplier(Number(e.target.value))}
+                  >
+                    <option value={1}>1x</option>
+                    <option value={2}>2x</option>
+                    <option value={3}>3x</option>
+                    <option value={4}>4x</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-2">Multiplier</label>
-                <select
-                  className="px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all bg-white"
-                  value={multiplier}
-                  onChange={(e) => setMultiplier(Number(e.target.value))}
-                >
-                  <option value={1}>1x</option>
-                  <option value={2}>2x</option>
-                  <option value={3}>3x</option>
-                  <option value={4}>4x</option>
-                </select>
+            )}
+            {gameType === 'wager' && (
+              <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                <p className="text-sm text-purple-800">
+                  <strong>Note:</strong> In wager games, points are determined by the slot players choose, not by question settings.
+                </p>
               </div>
-            </div>
+            )}
             <div className="border-t-2 border-slate-200 pt-4 mt-4">
               <div className="flex items-center gap-3 mb-3">
                 <label className="flex items-center gap-2 cursor-pointer">
