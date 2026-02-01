@@ -1,17 +1,71 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { QuestionInput } from "@/types/game";
 import { DEFAULT_POINTS, DEFAULT_MULTIPLIER, DEFAULT_MAX_WAGER, DEFAULT_TIMER_SECONDS, MAX_CHOICES } from "@/lib/constants";
+
+interface Question {
+  roundNumber?: number | null;
+  isBonus?: boolean;
+}
 
 interface QuestionFormProps {
   onSubmit: (question: QuestionInput) => Promise<void>;
   minimized?: boolean;
   onToggleMinimize?: () => void;
   gameType?: 'traditional' | 'wager';
+  existingQuestions?: Question[];
 }
 
-export default function QuestionForm({ onSubmit, minimized = false, onToggleMinimize, gameType = 'traditional' }: QuestionFormProps) {
+// Calculate suggested round/bonus for wager games
+function calculateSuggestedRoundBonus(existingQuestions: Question[], gameType: 'traditional' | 'wager'): { roundNumber: number | null, isBonus: boolean } {
+  if (gameType !== 'wager' || !existingQuestions || existingQuestions.length === 0) {
+    return { roundNumber: 1, isBonus: false };
+  }
+
+  // Group questions by round
+  const rounds: Record<number, { regular: number, bonus: number }> = {};
+  
+  for (const question of existingQuestions) {
+    const round = question.roundNumber || 0;
+    if (!rounds[round]) {
+      rounds[round] = { regular: 0, bonus: 0 };
+    }
+    if (question.isBonus) {
+      rounds[round].bonus++;
+    } else {
+      rounds[round].regular++;
+    }
+  }
+  
+  // Find the latest round (highest round number)
+  const roundNumbers = Object.keys(rounds).map(Number).sort((a, b) => b - a);
+  const latestRound = roundNumbers.length > 0 ? roundNumbers[0] : 0;
+  
+  if (latestRound > 0 && rounds[latestRound]) {
+    const latestRoundState = rounds[latestRound];
+    
+    // If latest round has 5 regular questions but no bonus, next question should be bonus
+    if (latestRoundState.regular >= 5 && latestRoundState.bonus === 0) {
+      return { roundNumber: latestRound, isBonus: true };
+    }
+    // If latest round has 5 regular + bonus, start a new round
+    else if (latestRoundState.regular >= 5 && latestRoundState.bonus >= 1) {
+      return { roundNumber: latestRound + 1, isBonus: false };
+    }
+    // If latest round has < 5 regular questions, fill the next slot
+    else {
+      return { roundNumber: latestRound, isBonus: false };
+    }
+  } else {
+    // No rounds exist yet, start round 1
+    return { roundNumber: 1, isBonus: false };
+  }
+}
+
+export default function QuestionForm({ onSubmit, minimized = false, onToggleMinimize, gameType = 'traditional', existingQuestions = [] }: QuestionFormProps) {
+  const suggestedRoundBonus = calculateSuggestedRoundBonus(existingQuestions, gameType);
+
   const [questionText, setQuestionText] = useState("");
   const [choices, setChoices] = useState(["", "", "", ""]);
   const [answer, setAnswer] = useState(0);
@@ -24,6 +78,17 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
   const [fillInBlankAnswer, setFillInBlankAnswer] = useState("");
   const [hasWager, setHasWager] = useState(false);
   const [maxWager, setMaxWager] = useState(DEFAULT_MAX_WAGER);
+  const [roundNumber, setRoundNumber] = useState<number | null>(suggestedRoundBonus.roundNumber);
+  const [isBonus, setIsBonus] = useState(suggestedRoundBonus.isBonus);
+
+  // Recalculate suggested round/bonus when existingQuestions changes
+  useEffect(() => {
+    if (gameType === 'wager') {
+      const nextSuggested = calculateSuggestedRoundBonus(existingQuestions, gameType);
+      setRoundNumber(nextSuggested.roundNumber);
+      setIsBonus(nextSuggested.isBonus);
+    }
+  }, [existingQuestions, gameType]);
 
   const handleSubmit = async () => {
     if (!questionText) return;
@@ -42,6 +107,8 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
       fillInBlankAnswer: isFillInBlank ? fillInBlankAnswer : undefined,
       hasWager,
       maxWager: hasWager ? maxWager : undefined,
+      roundNumber: gameType === 'wager' ? roundNumber : undefined,
+      isBonus: gameType === 'wager' ? isBonus : undefined,
     });
 
     // Reset form
@@ -57,6 +124,13 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
     setFillInBlankAnswer("");
     setHasWager(false);
     setMaxWager(DEFAULT_MAX_WAGER);
+    
+    // Recalculate suggested round/bonus for next question
+    if (gameType === 'wager') {
+      const nextSuggested = calculateSuggestedRoundBonus(existingQuestions, gameType);
+      setRoundNumber(nextSuggested.roundNumber);
+      setIsBonus(nextSuggested.isBonus);
+    }
   };
 
   return (
@@ -227,11 +301,45 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
               </div>
             )}
             {gameType === 'wager' && (
-              <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
-                <p className="text-sm text-purple-800">
-                  <strong>Note:</strong> In wager games, points are determined by the slot players choose, not by question settings.
-                </p>
-              </div>
+              <>
+                <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-4">
+                  <p className="text-sm text-purple-800">
+                    <strong>Note:</strong> In wager games, points are determined by the slot players choose, not by question settings.
+                  </p>
+                </div>
+                <div className="border-t border-slate-300 pt-4 mt-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700 mb-2">Round number</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-full px-4 py-2 border-2 border-slate-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 outline-none transition-all"
+                        placeholder="Round number (e.g., 1, 2, 3...)"
+                        value={roundNumber || ''}
+                        onChange={(e) => setRoundNumber(e.target.value ? parseInt(e.target.value) : null)}
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Each round typically has 5 regular questions followed by 1 bonus question.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isBonus}
+                          onChange={(e) => setIsBonus(e.target.checked)}
+                          className="w-5 h-5 border-2 border-slate-300 rounded focus:ring-2 focus:ring-purple-500"
+                        />
+                        <span className="text-sm font-semibold text-slate-700">Bonus question</span>
+                      </label>
+                      <p className="text-xs text-slate-500 mt-1 ml-7">
+                        Check this if this is a bonus question for the round. Bonus questions allow players to wager additional points.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
             <div className="border-t-2 border-slate-200 pt-4 mt-4">
               <div className="flex items-center gap-3 mb-3">

@@ -13,6 +13,7 @@ import QuestionList from "@/components/QuestionList";
 import PlayerManagement from "@/components/PlayerManagement";
 import GameControls from "@/components/GameControls";
 import type { QuestionInput } from "@/types/game";
+import { trackQuestionAdded, trackGameStarted, trackGameEnded } from "@/lib/analytics";
 
 function HostGameContent() {
   const params = useParams();
@@ -125,37 +126,35 @@ function HostGameContent() {
   async function handleAddQuestion(question: QuestionInput) {
     if (!game) return;
     
-    // Validate round limits for wager games
-    if (game.gameType === 'wager') {
-      // Determine which round this question will be assigned to
-      let targetRound: number;
-      
-      if (question.roundNumber !== undefined && question.roundNumber !== null) {
-        // Round explicitly provided
-        targetRound = question.roundNumber;
-      } else {
-        // Auto-calculate round based on question order
-        const existingQuestions = game.questions || [];
-        const nextOrder = existingQuestions.length;
-        // Calculate round: every 6 questions is a round (5 regular + 1 bonus)
-        targetRound = Math.floor(nextOrder / 6) + 1;
-      }
-      
+    // Validate round limits for wager games (only if round/bonus is explicitly provided)
+    if (game.gameType === 'wager' && question.roundNumber !== undefined && question.roundNumber !== null) {
       // If this is NOT a bonus question, check if round already has 5 regular questions
       if (!question.isBonus) {
         const regularQuestionsInRound = (game.questions || []).filter(
-          (q: any) => q.roundNumber === targetRound && !q.isBonus
+          (q: any) => q.roundNumber === question.roundNumber && !q.isBonus
         );
         
-      if (regularQuestionsInRound.length >= 5) {
-        setRoundLimitMessage(`Round ${targetRound} already has 5 regular questions. Please add a bonus question or create a new round.`);
-        setShowRoundLimitModal(true);
-        return;
-      }
+        if (regularQuestionsInRound.length >= 5) {
+          setRoundLimitMessage(`Round ${question.roundNumber} already has 5 regular questions. Please add a bonus question or create a new round.`);
+          setShowRoundLimitModal(true);
+          return;
+        }
       }
     }
     
     await addQuestion(game.id, question);
+    
+    // Track question added
+    const questionType = question.isFillInBlank ? 'fill_in_blank' 
+      : question.isTrueFalse ? 'true_false' 
+      : 'multiple_choice';
+    trackQuestionAdded(
+      game.gameType,
+      questionType,
+      question.hasTimer || false,
+      question.hasWager || false
+    );
+    
     loadGame();
   }
 
@@ -412,7 +411,17 @@ function HostGameContent() {
 
   async function handleActivateQuestion(index: number) {
     if (!game) return;
+    
+    // Track game started if this is the first question activation
+    const wasGameStarted = game.gameStarted || false;
+    
     await activateQuestion(game.id, index);
+    
+    // Track game started (only on first activation)
+    if (!wasGameStarted) {
+      trackGameStarted(game.gameType, game.questions?.length || 0);
+    }
+    
     loadGame();
   }
 
@@ -571,6 +580,22 @@ function HostGameContent() {
     setConfirmModalType(null);
     try {
       await endGame(game.id);
+      
+      // Track game ended
+      const questionCount = game.questions?.length || 0;
+      const playerCount = game.players?.length || 0;
+      // Count questions that have been answered (have player answers)
+      const questionsAnswered = game.questions?.filter((q: any) => {
+        return game.playerAnswers?.some((pa: any) => pa.questionId === q.id);
+      }).length || 0;
+      
+      trackGameEnded(
+        game.gameType,
+        questionCount,
+        playerCount,
+        questionsAnswered
+      );
+      
       loadGame(); // Reload to show ended state
       setEnding(false);
     } catch (error) {
@@ -957,12 +982,14 @@ function HostGameContent() {
         <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-bold text-slate-800">Wager Settings</h2>
+              <h2 className="text-2xl font-bold text-slate-800">Wager settings</h2>
             </div>
             {!editingWagerSettings && (
               <button
                 onClick={() => setEditingWagerSettings(true)}
-                className="px-4 py-1 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors border border-gray-800 border-b-4"
+                disabled={game.gameStarted && !game.gameEnded}
+                className="px-4 py-1 bg-primary text-white rounded-lg hover:bg-primary-hover transition-colors border border-gray-800 border-b-4 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-primary"
+                title={game.gameStarted && !game.gameEnded ? "Wager settings cannot be changed while the game is running" : "Edit wager settings"}
               >
                 Edit
               </button>
@@ -1110,6 +1137,7 @@ function HostGameContent() {
         minimized={minimizedSections.addQuestion}
         onToggleMinimize={() => toggleSection('addQuestion')}
         gameType={game.gameType}
+        existingQuestions={game.questions || []}
       />
 
       <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">

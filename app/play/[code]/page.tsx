@@ -11,6 +11,7 @@ import Modal from "@/components/Modal";
 import RandomQuestionDisplay from "@/components/RandomQuestionDisplay";
 import AnswerSubmission from "@/components/AnswerSubmission";
 import QuestionDisplay from "@/components/QuestionDisplay";
+import { trackAnswerSubmitted } from "@/lib/analytics";
 
 function PlayPageContent() {
   const params = useParams();
@@ -1205,6 +1206,17 @@ function PlayPageContent() {
       } else {
         await submitAnswer(playerId, currentQuestion.id, selectedAnswer, undefined, wagerForBonus || wagerAmount, slotToSubmit, roundNumber);
       }
+      
+      // Track answer submission
+      const questionType = currentQuestion.isFillInBlank ? 'fill_in_blank'
+        : currentQuestion.isTrueFalse ? 'true_false'
+        : 'multiple_choice';
+      trackAnswerSubmitted(
+        game.gameType,
+        questionType,
+        currentQuestion.hasWager || false
+      );
+      
       setSubmitted(true);
       
       // Announce submission to screen readers (only if answers aren't revealed yet)

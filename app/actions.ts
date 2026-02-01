@@ -23,7 +23,8 @@ import {
 } from "@/lib/errorHandler";
 import { 
   GAME_EXPIRY_MS, 
-  QUESTION_ORDER_FALLBACK 
+  QUESTION_ORDER_FALLBACK,
+  MAX_PLAYERS_PER_GAME
 } from "@/lib/constants";
 
 export async function createGame(
@@ -191,6 +192,18 @@ export async function joinGame(code: string, username: string, existingPlayerId?
     }
   }
   
+  // Check player count before allowing new player to join
+  const { count, error: countError } = await supabase
+    .from("players")
+    .select("*", { count: "exact", head: true })
+    .eq("game_id", game.id);
+  
+  if (countError) throw new Error(`Failed to check player count: ${countError.message}`);
+  
+  if (count !== null && count >= MAX_PLAYERS_PER_GAME) {
+    throw new Error(`This game has reached the maximum of ${MAX_PLAYERS_PER_GAME} players. Please try another game.`);
+  }
+  
   // No existing player found, create new one
   const { data, error } = await supabase
     .from("players")
@@ -235,24 +248,54 @@ export async function addQuestion(gameId: string, q: QuestionInput) {
   let isBonus = q.isBonus || false;
   
   if (game?.game_type === 'wager' && (roundNumber === undefined || roundNumber === null)) {
-    // Calculate round number: every 6 questions is a round (5 regular + 1 bonus)
-    // Questions 1-5: Round 1
-    // Question 6: Round 1, bonus
-    // Questions 7-11: Round 2
-    // Question 12: Round 2, bonus
-    // etc.
-    // Use nextOrder (which is 0-indexed for the new question's position)
-    const questionIndex = nextOrder;
-    
-    // Determine if this should be a bonus question (every 6th question, 1-indexed)
-    if ((questionIndex + 1) % 6 === 0) {
-      // This is a bonus question
-      isBonus = true;
-      roundNumber = Math.floor(questionIndex / 6) + 1;
+    // Intelligently determine round/bonus based on actual round state
+    if (existingQuestions && existingQuestions.length > 0) {
+      // Group questions by round
+      const rounds: Record<number, { regular: number, bonus: number }> = {};
+      
+      for (const question of existingQuestions) {
+        const round = question.round_number || 0;
+        if (!rounds[round]) {
+          rounds[round] = { regular: 0, bonus: 0 };
+        }
+        if (question.is_bonus) {
+          rounds[round].bonus++;
+        } else {
+          rounds[round].regular++;
+        }
+      }
+      
+      // Find the latest round (highest round number)
+      const roundNumbers = Object.keys(rounds).map(Number).sort((a, b) => b - a);
+      const latestRound = roundNumbers.length > 0 ? roundNumbers[0] : 0;
+      
+      if (latestRound > 0 && rounds[latestRound]) {
+        const latestRoundState = rounds[latestRound];
+        
+        // If latest round has 5 regular questions but no bonus, next question should be bonus
+        if (latestRoundState.regular >= 5 && latestRoundState.bonus === 0) {
+          roundNumber = latestRound;
+          isBonus = true;
+        }
+        // If latest round has 5 regular + bonus, start a new round
+        else if (latestRoundState.regular >= 5 && latestRoundState.bonus >= 1) {
+          roundNumber = latestRound + 1;
+          isBonus = false;
+        }
+        // If latest round has < 5 regular questions, fill the next slot
+        else {
+          roundNumber = latestRound;
+          isBonus = false;
+        }
+      } else {
+        // No rounds exist yet, start round 1
+        roundNumber = 1;
+        isBonus = false;
+      }
     } else {
-      // This is a regular question
+      // No questions exist yet, start round 1
+      roundNumber = 1;
       isBonus = false;
-      roundNumber = Math.floor(questionIndex / 6) + 1;
     }
   }
   
@@ -1183,6 +1226,7 @@ export async function resetGame(gameId: string) {
     .update({
       current_question_index: null,
       answers_revealed: false,
+      game_started: false, // Reset the game_started flag so game can be configured again
       game_ended: false, // Reset the game_ended flag so players can play again
       last_activity: new Date().toISOString(),
     })
@@ -1331,7 +1375,7 @@ export async function exportQuestions(gameId: string) {
     ["question_text", "choice_1", "choice_2", "choice_3", "choice_4", 
      "correct_answer", "points", "multiplier", "question_type", 
      "has_timer", "timer_seconds", "fill_in_blank_answer", 
-     "has_wager", "max_wager"].join(","),
+     "has_wager", "max_wager", "round_number", "is_bonus"].join(","),
     // Data rows
     ...questions.map(q => {
       const type = q.is_fill_in_blank ? "fill_in_blank" 
@@ -1368,7 +1412,9 @@ export async function exportQuestions(gameId: string) {
         q.timer_seconds || "",
         escapeCSVField(q.fill_in_blank_answer || ""),
         q.has_wager ? "true" : "false",
-        q.max_wager || ""
+        q.max_wager || "",
+        q.round_number || "",
+        q.is_bonus ? "true" : "false"
       ].join(",");
     })
   ];
@@ -1511,6 +1557,21 @@ export async function importQuestions(gameId: string, csvContent: string) {
         }
       }
       
+      // Parse round_number and is_bonus for wager games
+      let roundNumber: number | null | undefined = undefined;
+      if (rowData.round_number !== undefined && rowData.round_number !== null && rowData.round_number.trim() !== "") {
+        const parsed = parseInt(rowData.round_number.trim());
+        if (!isNaN(parsed) && parsed > 0) {
+          roundNumber = parsed;
+        }
+      }
+      
+      let isBonus: boolean | undefined = undefined;
+      if (rowData.is_bonus !== undefined && rowData.is_bonus !== null && rowData.is_bonus.trim() !== "") {
+        const isBonusValue = rowData.is_bonus.trim().toLowerCase();
+        isBonus = isBonusValue === "true";
+      }
+      
       // Create question - addQuestion automatically handles ordering by appending to the end
       const questionInput: QuestionInput = {
         text: rowData.question_text,
@@ -1531,6 +1592,13 @@ export async function importQuestions(gameId: string, csvContent: string) {
       }
       if (hasWager !== undefined) {
         questionInput.hasWager = hasWager;
+      }
+      // Include round/bonus fields if provided (for wager games)
+      if (roundNumber !== undefined) {
+        questionInput.roundNumber = roundNumber;
+      }
+      if (isBonus !== undefined) {
+        questionInput.isBonus = isBonus;
       }
       
       const question = await addQuestion(gameId, questionInput);

@@ -1,5 +1,7 @@
 "use client";
 
+import { MAX_PLAYERS_PER_GAME } from "@/lib/constants";
+
 interface Player {
   id: string;
   username: string;
@@ -27,8 +29,14 @@ export default function PlayerManagement({
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-2xl font-bold text-slate-800">Players</h2>
-          <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-bold">
-            {players.length}
+          <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+            players.length >= MAX_PLAYERS_PER_GAME 
+              ? 'bg-red-100 text-red-700' 
+              : players.length >= MAX_PLAYERS_PER_GAME * 0.8
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-purple-100 text-purple-700'
+          }`}>
+            {players.length} / {MAX_PLAYERS_PER_GAME}
           </span>
         </div>
         <button

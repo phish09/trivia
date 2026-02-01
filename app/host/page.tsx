@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { createGame } from "../actions";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { trackGameCreated } from "@/lib/analytics";
 
 export default function HostPage() {
   const [name, setName] = useState("");
@@ -50,6 +51,8 @@ export default function HostPage() {
         password.trim() || undefined,
         gameType
       );
+      // Track game creation
+      trackGameCreated(gameType, !!password.trim());
       // Store password in sessionStorage for this game
       if (password.trim()) {
         sessionStorage.setItem(`host_password_${game.code}`, password.trim());

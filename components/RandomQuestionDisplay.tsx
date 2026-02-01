@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { RANDOM_QUESTIONS, RandomQuestion } from "@/lib/randomQuestions";
 
 export default function RandomQuestionDisplay() {
@@ -16,6 +16,8 @@ export default function RandomQuestionDisplay() {
   const questionStartTimeRef = useRef<number | null>(null);
   const revealTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hasSubmittedRef = useRef<boolean>(false);
+  const scrollPositionRef = useRef<number>(0);
+  const isUpdatingCountdownRef = useRef<boolean>(false);
 
   // Decode HTML entities
   const decodeHtmlEntities = (text: string): string => {
@@ -94,6 +96,26 @@ export default function RandomQuestionDisplay() {
     setCountdown(5);
   };
 
+  // Preserve scroll position during countdown updates (prevents mobile scroll jumps)
+  useLayoutEffect(() => {
+    if (isUpdatingCountdownRef.current && typeof window !== 'undefined') {
+      // Use requestAnimationFrame to restore scroll after browser has updated layout
+      requestAnimationFrame(() => {
+        const savedScroll = scrollPositionRef.current;
+        const currentScroll = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+        // Only restore if scroll position changed significantly (more than 10px)
+        // This prevents interfering with intentional user scrolling
+        if (Math.abs(currentScroll - savedScroll) > 10) {
+          window.scrollTo({
+            top: savedScroll,
+            behavior: 'auto'
+          });
+        }
+        isUpdatingCountdownRef.current = false;
+      });
+    }
+  }, [countdown]);
+
   // Countdown effect - only runs when answer is revealed
   useEffect(() => {
     // Clear any existing interval first to prevent multiple intervals
@@ -108,6 +130,12 @@ export default function RandomQuestionDisplay() {
     }
 
     countdownIntervalRef.current = setInterval(() => {
+      // Save scroll position before state update
+      if (typeof window !== 'undefined') {
+        scrollPositionRef.current = window.scrollY || window.pageYOffset || document.documentElement.scrollTop;
+        isUpdatingCountdownRef.current = true;
+      }
+      
       setCountdown((prev) => {
         if (prev <= 1) {
           // Clear interval when countdown reaches 0
@@ -332,7 +360,13 @@ export default function RandomQuestionDisplay() {
       
       {/* Countdown Animation */}
       {randomQuestionRevealed && (
-        <div className="mt-6 flex flex-col items-center justify-center">
+        <div 
+          className="mt-6 flex flex-col items-center justify-center"
+          style={{ 
+            contain: 'layout style paint',
+            minHeight: '120px' // Reserve space to prevent layout shifts
+          }}
+        >
           <div className="text-sm text-slate-500 mb-2">Next question in</div>
           <div className="relative w-20 h-20 flex items-center justify-center">
             {/* Circular progress background */}

@@ -48,3 +48,6 @@ export const REALTIME_EVENTS_PER_SECOND = 10;
 // Game code generation
 export const GAME_CODE_MIN = 10000;
 export const GAME_CODE_MAX = 99999;
+
+// Player limits
+export const MAX_PLAYERS_PER_GAME = 50;

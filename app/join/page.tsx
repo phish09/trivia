@@ -1,12 +1,13 @@
 "use client";
 
-import { joinGame, verifyPlayerSession } from "../actions";
+import { joinGame, verifyPlayerSession, getGame } from "../actions";
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { getSessionForGame, saveSession, clearSession, getAllSessions } from "@/lib/session";
 import { getOrCreatePersistentPlayerId, getPlayerIdForGame, storePlayerMapping, clearPlayerMapping, getAllPlayerMappings } from "@/lib/cookies";
 import Modal from "@/components/Modal";
 import Link from "next/link";
+import { trackPlayerJoined } from "@/lib/analytics";
 
 function JoinForm() {
   const router = useRouter();
@@ -139,9 +140,21 @@ function JoinForm() {
       
       // Check if we have an existing player ID for this game
       const existingPlayerId = getPlayerIdForGame(persistentPlayerId, code);
+      const isNewPlayer = !existingPlayerId;
       
       // Join game (will restore existing player if found, or create new one)
       const player = await joinGame(code, name.trim(), existingPlayerId);
+      
+      // Track player join (only for new players)
+      if (isNewPlayer) {
+        try {
+          const game = await getGame(code);
+          trackPlayerJoined(game.gameType, true);
+        } catch (err) {
+          // If we can't get game info, track without game type
+          trackPlayerJoined('traditional', true);
+        }
+      }
       
       // Store the mapping for future sessions
       storePlayerMapping(persistentPlayerId, code, player.id);
@@ -166,6 +179,11 @@ function JoinForm() {
       if (errorMessage.toLowerCase().includes("game not found") || errorMessage.toLowerCase().includes("not found")) {
         setModalTitle("Game Not Found");
         setModalMessage(`The game code "${code}" was not found. Please check the code and try again.`);
+        setShowModal(true);
+      } else if (errorMessage.toLowerCase().includes("maximum") || errorMessage.toLowerCase().includes("reached")) {
+        // Max players reached
+        setModalTitle("Game Full");
+        setModalMessage(errorMessage);
         setShowModal(true);
       } else {
         setModalTitle("Error");
