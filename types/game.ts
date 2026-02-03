@@ -20,6 +20,7 @@ export interface Question {
   maxWager: number | null;
   roundNumber: number | null;
   isBonus: boolean;
+  source: string | null;
 }
 
 export interface QuestionInput {
@@ -37,6 +38,7 @@ export interface QuestionInput {
   maxWager?: number;
   roundNumber?: number | null;
   isBonus?: boolean;
+  source?: string;
 }
 
 export interface Player {
@@ -122,6 +124,7 @@ export interface DatabaseQuestion {
   max_wager: number | null;
   round_number: number | null;
   is_bonus: boolean;
+  source: string | null;
   created_at?: string;
 }
 

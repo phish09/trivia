@@ -49,6 +49,7 @@ function HostGameContent() {
   const [editMaxWager, setEditMaxWager] = useState(10);
   const [editRoundNumber, setEditRoundNumber] = useState<number | null>(null);
   const [editIsBonus, setEditIsBonus] = useState(false);
+  const [editSource, setEditSource] = useState("");
   const [draggedQuestionId, setDraggedQuestionId] = useState<string | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const confettiCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -179,6 +180,7 @@ function HostGameContent() {
     setEditMaxWager(question.maxWager || 10);
     setEditRoundNumber(question.roundNumber || null);
     setEditIsBonus(question.isBonus || false);
+    setEditSource(question.source || "");
   }
 
   function handleCancelEdit() {
@@ -197,6 +199,7 @@ function HostGameContent() {
     setEditMaxWager(10);
     setEditRoundNumber(null);
     setEditIsBonus(false);
+    setEditSource("");
   }
 
   async function handleSaveEdit() {
@@ -233,6 +236,7 @@ function HostGameContent() {
         maxWager: editHasWager ? editMaxWager : undefined,
         roundNumber: editRoundNumber,
         isBonus: editIsBonus,
+        source: editSource.trim() || undefined,
       });
       handleCancelEdit();
       loadGame();
@@ -432,6 +436,7 @@ function HostGameContent() {
     setIsRevealing(true);
     try {
       await revealAnswers(game.id, currentQuestion.id);
+      // No delay needed - realtime will update players instantly
       await loadGame();
     } finally {
       setIsRevealing(false);
@@ -514,18 +519,14 @@ function HostGameContent() {
     // nextQuestion will automatically mark game as ended if there are no more questions
     await nextQuestion(game.id, nextIndex);
     
-    // Wait a bit for the database to update, then load game
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // No delay needed - realtime will update players instantly
     await loadGame();
     
     // Auto-activate the next question so timer starts immediately
-    // Use a small delay to ensure state is updated
-    await new Promise(resolve => setTimeout(resolve, 100));
     const updatedGame = await getGame(code);
     if (updatedGame && !updatedGame.gameEnded && updatedGame.currentQuestionIndex !== null && updatedGame.currentQuestionIndex !== undefined) {
       await activateQuestion(updatedGame.id, updatedGame.currentQuestionIndex);
-      // Wait a bit for activation to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // No delay needed - realtime will update players instantly
       await loadGame();
     }
   }
@@ -1207,6 +1208,7 @@ function HostGameContent() {
             editMaxWager={editMaxWager}
             editRoundNumber={editRoundNumber}
             editIsBonus={editIsBonus}
+            editSource={editSource}
             onStartEdit={handleStartEdit}
             onSaveEdit={handleSaveEdit}
             onCancelEdit={handleCancelEdit}
@@ -1230,6 +1232,7 @@ function HostGameContent() {
             setEditMaxWager={setEditMaxWager}
             setEditRoundNumber={setEditRoundNumber}
             setEditIsBonus={setEditIsBonus}
+            setEditSource={setEditSource}
           />
         )}
       </div>

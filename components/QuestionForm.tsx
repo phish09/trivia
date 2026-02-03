@@ -80,6 +80,7 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
   const [maxWager, setMaxWager] = useState(DEFAULT_MAX_WAGER);
   const [roundNumber, setRoundNumber] = useState<number | null>(suggestedRoundBonus.roundNumber);
   const [isBonus, setIsBonus] = useState(suggestedRoundBonus.isBonus);
+  const [source, setSource] = useState("");
 
   // Recalculate suggested round/bonus when existingQuestions changes
   useEffect(() => {
@@ -109,6 +110,7 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
       maxWager: hasWager ? maxWager : undefined,
       roundNumber: gameType === 'wager' ? roundNumber : undefined,
       isBonus: gameType === 'wager' ? isBonus : undefined,
+      source: source.trim() || undefined,
     });
 
     // Reset form
@@ -415,6 +417,20 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
                   </p>
                 </div>
               )}
+            </div>
+            <div className="border-t-2 border-slate-200 pt-4 mt-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-2">Source/Attribution (optional)</label>
+                <input
+                  className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-primary outline-none transition-all"
+                  placeholder="e.g., Wikipedia, Book Title, etc."
+                  value={source}
+                  onChange={(e) => setSource(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  Add context or attribution for the answer. This will be shown to players when answers are revealed.
+                </p>
+              </div>
             </div>
             <div className="flex justify-end mt-4">
               <button

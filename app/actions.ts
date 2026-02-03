@@ -338,6 +338,11 @@ export async function addQuestion(gameId: string, q: QuestionInput) {
     insertData.is_bonus = isBonus;
   }
   
+  // Set source/attribution if provided
+  if (q.source !== undefined) {
+    insertData.source = q.source || null;
+  }
+  
   const { data, error } = await supabase
     .from("questions")
     .insert(insertData)
@@ -393,6 +398,11 @@ export async function updateQuestion(questionId: string, q: QuestionInput) {
   } else if (!q.hasWager) {
     // Clear max_wager if wagering is disabled
     updateData.max_wager = null;
+  }
+  
+  // Set source/attribution if provided
+  if (q.source !== undefined) {
+    updateData.source = q.source || null;
   }
   
   // Set round fields if provided (for wager games)
@@ -638,6 +648,7 @@ export async function getGame(code: string) {
         maxWager: q.max_wager || null,
         roundNumber: q.round_number || null,
         isBonus: q.is_bonus || false,
+        source: q.source || null,
       })),
     players: (playersWithScores || []).map((p: DatabasePlayer) => ({
       id: p.id,

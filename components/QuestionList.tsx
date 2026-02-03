@@ -43,6 +43,7 @@ interface QuestionListProps {
   editMaxWager: number;
   editRoundNumber: number | null;
   editIsBonus: boolean;
+  editSource: string;
   // Callbacks
   onStartEdit: (question: Question) => void;
   onSaveEdit: () => void;
@@ -68,6 +69,7 @@ interface QuestionListProps {
   setEditMaxWager: (maxWager: number) => void;
   setEditRoundNumber: (roundNumber: number | null) => void;
   setEditIsBonus: (isBonus: boolean) => void;
+  setEditSource: (source: string) => void;
 }
 
 export default function QuestionList({
@@ -91,6 +93,7 @@ export default function QuestionList({
   editMaxWager,
   editRoundNumber,
   editIsBonus,
+  editSource,
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
@@ -114,6 +117,7 @@ export default function QuestionList({
   setEditMaxWager,
   setEditRoundNumber,
   setEditIsBonus,
+  setEditSource,
 }: QuestionListProps) {
   // Store gameType with explicit type to prevent narrowing
   const gameTypeValue: 'traditional' | 'wager' = gameType;
@@ -402,37 +406,51 @@ export default function QuestionList({
                                 </div>
                               </div>
                             </div>
-                          )}
-                          <div className="flex gap-3 pt-2">
-                            <button
-                              className="border border-b-4 border-emerald-900 px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
-                              onClick={onSaveEdit}
-                            >
-                              Save
-                            </button>
-                            <button
-                              className="border border-b-4 border-slate-700 px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-300 transition-all flex items-center gap-2"
-                              onClick={onCancelEdit}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex flex-col md:flex-row justify-between items-start">
-                          <div className="flex-1 flex items-start gap-2">
-                            <div className="text-gray-400 mt-1 cursor-grab active:cursor-grabbing" title="Drag to reorder">
-                              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                                <circle cx="7" cy="5" r="1.5"/>
-                                <circle cx="13" cy="5" r="1.5"/>
-                                <circle cx="7" cy="10" r="1.5"/>
-                                <circle cx="13" cy="10" r="1.5"/>
-                                <circle cx="7" cy="15" r="1.5"/>
-                                <circle cx="13" cy="15" r="1.5"/>
-                              </svg>
+                              )}
+                              <div className="border-t-2 border-slate-200 pt-4 mt-4">
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-700 mb-2">Source/Attribution (optional)</label>
+                                  <input
+                                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                                    placeholder="e.g., Wikipedia, Book Title, etc."
+                                    value={editSource}
+                                    onChange={(e) => setEditSource(e.target.value)}
+                                  />
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    Add context or attribution for the answer. This will be shown to players when answers are revealed.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-3 pt-2">
+                                <button
+                                  className="border border-b-4 border-emerald-900 px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
+                                  onClick={onSaveEdit}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  className="border border-b-4 border-slate-700 px-6 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-300 transition-all flex items-center gap-2"
+                                  onClick={onCancelEdit}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
                             </div>
-                            <div className="flex-1">
-                              <p className="font-semibold">{idx + 1}. {q.text}</p>
+                          ) : (
+                            <div className="flex flex-col md:flex-row justify-between items-start">
+                              <div className="flex-1 flex items-start gap-2">
+                                <div className="text-gray-400 mt-1 cursor-grab active:cursor-grabbing" title="Drag to reorder">
+                                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                                    <circle cx="7" cy="5" r="1.5"/>
+                                    <circle cx="13" cy="5" r="1.5"/>
+                                    <circle cx="7" cy="10" r="1.5"/>
+                                    <circle cx="13" cy="10" r="1.5"/>
+                                    <circle cx="7" cy="15" r="1.5"/>
+                                    <circle cx="13" cy="15" r="1.5"/>
+                                  </svg>
+                                </div>
+                                <div className="flex-1">
+                                  <p className="font-semibold">{idx + 1}. {q.text}</p>
                               {q.choices && q.choices.length > 0 && (
                                 <p className="text-sm text-gray-600">
                                   {q.choices.map((c: string, i: number) => (
@@ -719,6 +737,20 @@ export default function QuestionList({
                                   </div>
                                 </div>
                               )}
+                              <div className="border-t-2 border-slate-200 pt-4 mt-4">
+                                <div>
+                                  <label className="block text-sm font-semibold text-slate-700 mb-2">Source/Attribution (optional)</label>
+                                  <input
+                                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                                    placeholder="e.g., Wikipedia, Book Title, etc."
+                                    value={editSource}
+                                    onChange={(e) => setEditSource(e.target.value)}
+                                  />
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    Add context or attribution for the answer. This will be shown to players when answers are revealed.
+                                  </p>
+                                </div>
+                              </div>
                               <div className="flex gap-3 pt-2">
                                 <button
                                   className="border border-b-4 border-emerald-900 px-6 py-2 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-105 transform transition-all flex items-center gap-2"
@@ -1055,6 +1087,20 @@ export default function QuestionList({
                     </p>
                   </div>
                 )}
+              </div>
+              <div className="border-t-2 border-slate-200 pt-4 mt-4">
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-2">Source/Attribution (optional)</label>
+                  <input
+                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all"
+                    placeholder="e.g., Wikipedia, Book Title, etc."
+                    value={editSource}
+                    onChange={(e) => setEditSource(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Add context or attribution for the answer. This will be shown to players when answers are revealed.
+                  </p>
+                </div>
               </div>
               <div className="flex gap-3 pt-2">
                 <button

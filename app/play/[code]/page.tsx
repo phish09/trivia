@@ -35,6 +35,11 @@ function PlayPageContent() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showCopiedTooltip, setShowCopiedTooltip] = useState(false);
   const textAnswerDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const loadGameThrottleRef = useRef<NodeJS.Timeout | null>(null);
+  const lastLoadGameTimeRef = useRef<number>(0);
+  const lastRealtimeUpdateRef = useRef<number>(0);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const realtimeWorkingRef = useRef<boolean>(false);
   const [textAnswerDisplay, setTextAnswerDisplay] = useState<string>("");
   const [answersSectionExpanded, setAnswersSectionExpanded] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
@@ -152,8 +157,15 @@ function PlayPageContent() {
       
       // Optimization: Cache questions locally since they don't change during gameplay
       // This reduces egress by reusing cached question data
+      // BUT: Always use fresh questions when timer is active to ensure timer properties are correct
       const cacheKey = `trivia_questions_${gameData.id}`;
-      if (typeof window !== 'undefined') {
+      const hasActiveTimer = gameData.currentQuestionIndex !== null && 
+        gameData.currentQuestionIndex !== undefined &&
+        gameData.questionStartTime &&
+        gameData.questions?.[gameData.currentQuestionIndex]?.hasTimer;
+      
+      if (typeof window !== 'undefined' && !hasActiveTimer) {
+        // Only use cache if timer is not active (to ensure timer properties are always fresh)
         const cached = localStorage.getItem(cacheKey);
         if (cached) {
           try {
@@ -198,6 +210,12 @@ function PlayPageContent() {
             questions: gameData.questions,
           }));
         }
+      } else if (hasActiveTimer) {
+        // Timer is active - always use fresh questions and update cache
+        localStorage.setItem(cacheKey, JSON.stringify({
+          gameId: gameData.id,
+          questions: gameData.questions,
+        }));
       }
       
       // Check if question changed (to reset submitted state)
@@ -316,6 +334,33 @@ function PlayPageContent() {
         localStorage.removeItem(`playerId_${code}`);
         router.push(`/join?code=${code}`);
       }
+    }
+  }
+
+  // Throttled version of loadGame for realtime updates (max once per interval)
+  // This prevents rapid-fire requests when multiple realtime events fire quickly
+  function throttledLoadGame(isCritical = false) {
+    const now = Date.now();
+    // Increased throttle times to reduce costs:
+    // - Critical updates: 200ms (was 50ms) - still fast but reduces rapid calls
+    // - Non-critical updates: 1000ms (was 200ms) - much less frequent for player answers
+    const THROTTLE_MS = isCritical ? 200 : 1000; 
+    const timeSinceLastLoad = now - lastLoadGameTimeRef.current;
+
+    if (loadGameThrottleRef.current) {
+      clearTimeout(loadGameThrottleRef.current);
+    }
+
+    if (timeSinceLastLoad >= THROTTLE_MS) {
+      // Enough time has passed, load immediately
+      lastLoadGameTimeRef.current = now;
+      loadGame();
+    } else {
+      // Schedule load after throttle period
+      loadGameThrottleRef.current = setTimeout(() => {
+        lastLoadGameTimeRef.current = Date.now();
+        loadGame();
+      }, THROTTLE_MS - timeSinceLastLoad);
     }
   }
 
@@ -648,8 +693,107 @@ function PlayPageContent() {
           filter: `id=eq.${game.id}`,
         },
         (payload) => {
-          // Game state changed, reload game data
-          loadGame();
+          // Optimistic update: immediately update UI based on payload
+          const newData = payload.new as any;
+          if (newData) {
+            // Check if this is a critical update (reveal answers, next question, or timer start)
+            const isCritical = 
+              (newData.answers_revealed !== undefined && newData.answers_revealed !== game?.answersRevealed) ||
+              (newData.current_question_index !== undefined && newData.current_question_index !== game?.currentQuestionIndex) ||
+              (newData.game_ended !== undefined && newData.game_ended !== game?.gameEnded) ||
+              (newData.question_start_time !== undefined && newData.question_start_time !== game?.questionStartTime);
+            
+            // Always update questionStartTime if present (critical for timer to work)
+            const hasTimerUpdate = newData.question_start_time !== undefined;
+            
+            // Debug: log timer-related updates
+            if (hasTimerUpdate) {
+              console.log('[Timer] Realtime update:', {
+                question_start_time: newData.question_start_time,
+                current_question_index: newData.current_question_index,
+                previousQuestionStartTime: game?.questionStartTime,
+                hasTimer: game?.questions?.[newData.current_question_index ?? game?.currentQuestionIndex ?? -1]?.hasTimer,
+                timerSeconds: game?.questions?.[newData.current_question_index ?? game?.currentQuestionIndex ?? -1]?.timerSeconds,
+              });
+            }
+            
+            // Optimistically update critical state for instant UI feedback
+            if ((isCritical || hasTimerUpdate) && game) {
+              setGame((prevGame: any) => {
+                if (!prevGame) return prevGame;
+                const updated: any = {
+                  ...prevGame,
+                  answersRevealed: newData.answers_revealed ?? prevGame.answersRevealed,
+                  currentQuestionIndex: newData.current_question_index !== undefined 
+                    ? newData.current_question_index 
+                    : prevGame.currentQuestionIndex,
+                  gameEnded: newData.game_ended ?? prevGame.gameEnded,
+                };
+                
+                // Always update questionStartTime if provided (critical for timer)
+                // Calculate timeRemaining optimistically to show correct time immediately
+                if (newData.question_start_time !== undefined) {
+                  updated.questionStartTime = newData.question_start_time;
+                  
+                  // Calculate timeRemaining optimistically using server timestamp
+                  // This ensures players see the full timer even if there's network delay
+                  if (newData.question_start_time !== null) {
+                    const questionIndex = newData.current_question_index !== undefined 
+                      ? newData.current_question_index 
+                      : prevGame.currentQuestionIndex;
+                    const currentQuestion = prevGame.questions?.[questionIndex];
+                    
+                    if (currentQuestion?.hasTimer && currentQuestion.timerSeconds) {
+                      // Calculate time remaining from server timestamp
+                      // Use server timestamp to account for network latency
+                      const serverStartTime = new Date(newData.question_start_time).getTime();
+                      const now = Date.now();
+                      const elapsed = Math.floor((now - serverStartTime) / 1000);
+                      const remaining = Math.max(0, currentQuestion.timerSeconds - elapsed);
+                      updated.timeRemaining = remaining;
+                      
+                      console.log('[Timer] Optimistic calculation:', {
+                        serverStartTime: newData.question_start_time,
+                        elapsed,
+                        timerSeconds: currentQuestion.timerSeconds,
+                        remaining,
+                      });
+                    } else {
+                      // Question doesn't have timer or we don't have question data yet
+                      // Set to null - loadGame() will update with correct value
+                      updated.timeRemaining = null;
+                    }
+                  } else {
+                    // Timer cleared
+                    updated.timeRemaining = null;
+                  }
+                }
+                
+                // Ensure questions array is preserved (critical for timer to access question.hasTimer)
+                // The questions array should already be preserved via ...prevGame, but be explicit
+                if (prevGame.questions) {
+                  updated.questions = prevGame.questions;
+                }
+                
+                return updated;
+              });
+            }
+            
+            // Use throttled loadGame for all updates to reduce costs
+            // Critical updates use faster throttle (200ms), non-critical use slower (1000ms)
+            // This ensures players see updates quickly while reducing database calls
+            if (isCritical || (hasTimerUpdate && newData.question_start_time !== null)) {
+              // Critical update - use fast throttle (200ms) instead of immediate
+              // Still very fast but prevents rapid-fire calls if multiple events fire
+              lastRealtimeUpdateRef.current = Date.now();
+              throttledLoadGame(true); // Use critical throttle (200ms)
+            } else {
+              throttledLoadGame(false); // Use non-critical throttle (1000ms)
+            }
+          } else {
+            // Fallback: just reload
+            throttledLoadGame(false);
+          }
         }
       )
       .on(
@@ -663,22 +807,31 @@ function PlayPageContent() {
             : undefined,
         },
         () => {
-          // Player answers changed, reload game data
-          loadGame();
+          // Player answers changed - less critical, use slow throttle (1000ms)
+          // This significantly reduces calls when multiple players submit answers
+          throttledLoadGame(false);
         }
       )
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           console.log('✅ Realtime subscription active');
+          realtimeWorkingRef.current = true;
         } else if (status === 'CHANNEL_ERROR') {
           console.warn('⚠️ Realtime subscription error, falling back to polling');
+          realtimeWorkingRef.current = false;
+        } else {
+          // Other statuses (TIMED_OUT, CLOSED, etc.) - realtime not working
+          realtimeWorkingRef.current = false;
         }
       });
 
     return () => {
+      if (loadGameThrottleRef.current) {
+        clearTimeout(loadGameThrottleRef.current);
+      }
       supabase.removeChannel(channel);
     };
-  }, [game?.id, verifying]);
+  }, [game?.id, verifying, game?.answersRevealed, game?.currentQuestionIndex, game?.gameEnded]);
 
   // Poll for updates when waiting for host actions (fallback if realtime fails)
   useEffect(() => {
@@ -700,9 +853,40 @@ function PlayPageContent() {
       game.gameEnded; // Game ended, keep polling to show endgame screen
 
     if (shouldPoll) {
-      // Poll every 3 seconds when waiting for host actions
-      const interval = setInterval(loadGame, 3000);
-      return () => clearInterval(interval);
+      // Adaptive polling based on realtime status:
+      // - If realtime is working: effectively poll every 10 seconds (reduces cost by 80%)
+      // - If realtime is not working: poll every 2 seconds (more frequent fallback)
+      const pollFn = () => {
+        const timeSinceRealtime = Date.now() - lastRealtimeUpdateRef.current;
+        const isRealtimeWorking = realtimeWorkingRef.current;
+        
+        // If realtime is working and we've received updates recently, skip this poll
+        // This reduces costs significantly when realtime is handling updates
+        if (isRealtimeWorking && timeSinceRealtime < 8000) {
+          // Realtime is working and we got an update recently (within 8s), skip polling
+          // This effectively makes polling interval 10s when realtime works
+          return;
+        }
+        
+        // Poll if:
+        // 1. Realtime is not working (need frequent fallback every 2s)
+        // 2. Realtime is working but it's been 8+ seconds since last update (safety net every 10s)
+        if (!isRealtimeWorking || timeSinceRealtime >= 8000) {
+          loadGame();
+        }
+      };
+      
+      // Check every 3 seconds, but pollFn will skip most polls when realtime is working
+      // This gives us: 3s polling when realtime fails, ~10s effective polling when realtime works
+      // Increased from 2s to 3s to further reduce costs
+      pollingIntervalRef.current = setInterval(pollFn, 3000);
+      
+      return () => {
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      };
     }
   }, [playerId, verifying, game, submitted]);
 
@@ -1480,6 +1664,16 @@ function PlayPageContent() {
                   
                   if (!playerAnswer) {
                     // Player didn't answer this question
+                    // Determine correct answer display
+                    let correctAnswerDisplay = "";
+                    if (question.isTrueFalse) {
+                      correctAnswerDisplay = question.answer === 0 ? "True" : "False";
+                    } else if (question.isFillInBlank) {
+                      correctAnswerDisplay = question.fillInBlankAnswer || "N/A";
+                    } else {
+                      correctAnswerDisplay = question.choices?.[question.answer] || "N/A";
+                    }
+                    
                     return (
                       <div key={question.id} className="border-2 border-slate-200 rounded-xl p-5 bg-slate-50">
                         <div className="flex items-center gap-3 mb-3">
@@ -1491,7 +1685,21 @@ function PlayPageContent() {
                             <span className="text-sm text-slate-500">No answer submitted 😔</span>
                           </div>
                         </div>
-                        <p className="text-slate-700 font-bold">{question.text}</p>
+                        <p className="text-slate-700 font-bold mb-4">{question.text}</p>
+                        <div className="mt-4">
+                          <span className="text-xs font-semibold text-slate-600 !leading-tight">Correct answer:</span>
+                          <div className="text-black !leading-tight mt-1">
+                            {correctAnswerDisplay}
+                          </div>
+                          {question.source && (
+                            <div className="text-xs text-slate-600 mt-2 !leading-tight flex items-center gap-1">
+                              <svg className="w-3 h-3 text-slate-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                              <span>{question.source}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     );
                   }
@@ -1584,6 +1792,24 @@ function PlayPageContent() {
                             <span className="text-xs font-semibold text-slate-600 !leading-tight">Correct answer:</span>
                             <div className="text-black !leading-tight">
                               {correctAnswerDisplay}
+                            </div>
+                            {question.source && (
+                              <div className="text-xs text-slate-600 mt-2 italic !leading-tight flex items-center gap-1">
+                                <svg className="w-3 h-3 text-slate-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                </svg>
+                                <span>{question.source}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {isCorrect && question.source && (
+                          <div className="mt-4 p-3 rounded-lg bg-white border-2 border-emerald-600">
+                            <div className="text-xs text-slate-600 italic !leading-tight flex items-center gap-1">
+                              <svg className="w-3 h-3 text-slate-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                              </svg>
+                              <span>{question.source}</span>
                             </div>
                           </div>
                         )}
@@ -1917,7 +2143,7 @@ function PlayPageContent() {
                   : "bg-gradient-to-r from-red-50 to-pink-50 border-red-700 border-b-6"
               }`}>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-start gap-3">
                     {isCorrect ? (
                       <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
                         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1947,6 +2173,14 @@ function PlayPageContent() {
                             }
                           </span>
                         </p>
+                        {currentQuestion.source && (
+                          <p className="text-sm text-slate-800 mt-2 flex items-center gap-1">
+                            <svg className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                            </svg>
+                            <span>{currentQuestion.source}</span>
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1969,7 +2203,27 @@ function PlayPageContent() {
               </div>
             ) : (
               <div className="mb-6 p-6 bg-slate-50 rounded-xl border-2 border-slate-200">
-                <p className="text-slate-600 font-medium">You didn't submit an answer for this question. 😔</p>
+                <p className="text-slate-600 font-medium mb-2">You didn't submit an answer for this question. 😔</p>
+                <div className="flex items-center gap-2">
+                  <span className="uppercase text-xs tracking-wider relative top-px">Correct answer:</span>
+                  <div className="font-bold text-slate-900 leading-tight">
+                    {currentQuestion.isTrueFalse 
+                      ? (currentQuestion.answer === 0 ? "True" : "False")
+                      : currentQuestion.isFillInBlank
+                      ? (currentQuestion.fillInBlankAnswer || "N/A")
+                      : currentQuestion.choices[currentQuestion.answer]
+                    }
+                  </div>
+                  
+                </div>
+                {currentQuestion.source && (
+                    <div className="text-sm text-slate-800 mt-2 flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      <span>{currentQuestion.source}</span>
+                    </div>
+                  )}
               </div>
             )}
 
@@ -2054,8 +2308,8 @@ function PlayPageContent() {
           </div>
 
           {/* Game Code */}
-          <div className="bg-white rounded-2xl shadow-xl p-6 border border-slate-200">
-            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100">
+          <div className="rounded-2xl">
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6 border border-blue-100 shadow-xl">
               <p className="text-sm font-semibold text-slate-600 mb-1">Game code</p>
               <div className="flex items-center gap-3">
                 <p className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent tracking-wider">

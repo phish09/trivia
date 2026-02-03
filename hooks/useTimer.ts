@@ -20,6 +20,14 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
 
   // Initialize timer when question changes or starts
   useEffect(() => {
+    console.log('[Timer] Hook running:', {
+      hasGame: !!game,
+      currentQuestionIndex: game?.currentQuestionIndex,
+      questionStartTime: game?.questionStartTime,
+      answersRevealed: game?.answersRevealed,
+      questionsLength: game?.questions?.length,
+    });
+
     if (!game || game.currentQuestionIndex === null || game.currentQuestionIndex === undefined) {
       setTimeRemaining(null);
       currentQuestionIdRef.current = null;
@@ -29,7 +37,21 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
     }
 
     const currentQuestion = game.questions?.[game.currentQuestionIndex];
+    console.log('[Timer] Current question:', {
+      hasQuestion: !!currentQuestion,
+      hasTimer: currentQuestion?.hasTimer,
+      timerSeconds: currentQuestion?.timerSeconds,
+      answersRevealed: game.answersRevealed,
+    });
+
     if (!currentQuestion || !currentQuestion.hasTimer || game.answersRevealed) {
+      if (currentQuestion && currentQuestion.hasTimer && !game.answersRevealed) {
+        console.log('[Timer] Timer should be active but conditions not met:', {
+          hasQuestion: !!currentQuestion,
+          hasTimer: currentQuestion.hasTimer,
+          answersRevealed: game.answersRevealed,
+        });
+      }
       setTimeRemaining(null);
       currentQuestionIdRef.current = null;
       previousQuestionStartTimeRef.current = null;
@@ -56,6 +78,14 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
     if (game.questionStartTime && currentQuestion.hasTimer && currentQuestion.timerSeconds) {
       // Initialize if question changed, start time changed, or not yet initialized
       if (questionChanged || startTimeChanged || !timerInitializedRef.current) {
+        console.log('[Timer] Initializing timer:', {
+          questionStartTime: game.questionStartTime,
+          hasTimer: currentQuestion.hasTimer,
+          timerSeconds: currentQuestion.timerSeconds,
+          questionChanged,
+          startTimeChanged,
+          timeRemaining: game.timeRemaining,
+        });
         timerInitializedRef.current = true;
 
         // Use server-calculated time if available, otherwise calculate client-side
@@ -89,6 +119,13 @@ export function useTimer({ game, submitted = false, onExpire }: UseTimerOptions)
       previousQuestionStartTimeRef.current = game.questionStartTime;
     } else if (!game.questionStartTime) {
       // No start time yet - wait for it to be set
+      if (currentQuestion.hasTimer && currentQuestion.timerSeconds) {
+        console.log('[Timer] Waiting for questionStartTime:', {
+          hasTimer: currentQuestion.hasTimer,
+          timerSeconds: currentQuestion.timerSeconds,
+          questionStartTime: game.questionStartTime,
+        });
+      }
       setTimeRemaining(null);
       timerInitializedRef.current = false;
       previousQuestionStartTimeRef.current = null;
