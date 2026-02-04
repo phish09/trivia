@@ -126,6 +126,7 @@ export default function QuestionForm({ onSubmit, minimized = false, onToggleMini
     setFillInBlankAnswer("");
     setHasWager(false);
     setMaxWager(DEFAULT_MAX_WAGER);
+    setSource("");
     
     // Recalculate suggested round/bonus for next question
     if (gameType === 'wager') {
