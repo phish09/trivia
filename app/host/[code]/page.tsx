@@ -12,6 +12,7 @@ import QuestionForm from "@/components/QuestionForm";
 import QuestionList from "@/components/QuestionList";
 import PlayerManagement from "@/components/PlayerManagement";
 import GameControls from "@/components/GameControls";
+import PlayerAnswersView from "@/components/PlayerAnswersView";
 import type { QuestionInput } from "@/types/game";
 import { trackQuestionAdded, trackGameStarted, trackGameEnded } from "@/lib/analytics";
 
@@ -80,6 +81,8 @@ function HostGameContent() {
   const [editingWagerSettings, setEditingWagerSettings] = useState(false);
   const [wagerAmounts, setWagerAmounts] = useState<number[]>([2, 4, 6, 8, 10]);
   const [bonusMaxWager, setBonusMaxWager] = useState<number>(20);
+  const [selectedPlayer, setSelectedPlayer] = useState<{id: string, username: string} | null>(null);
+  const [showPlayerAnswersModal, setShowPlayerAnswersModal] = useState(false);
 
   // Timer countdown logic - using server-provided time
   const timeRemaining = useTimer({
@@ -613,6 +616,11 @@ function HostGameContent() {
     setShowConfirmModal(true);
   }
 
+  function handlePlayerClick(playerId: string, username: string) {
+    setSelectedPlayer({ id: playerId, username });
+    setShowPlayerAnswersModal(true);
+  }
+
   async function handleKickPlayer() {
     if (!playerToKick || !game) return;
 
@@ -1117,14 +1125,16 @@ function HostGameContent() {
           </div>
           <div className="space-y-3">
             {sortedPlayers.map((player: any, index: number) => (
-              <div 
-                key={player.id} 
-                className={`flex items-center justify-between p-4 rounded-xl border-2 border-b-6 transition-all ${
+              <button
+                key={player.id}
+                onClick={() => handlePlayerClick(player.id, player.username)}
+                className={`w-full flex items-center justify-between p-4 rounded-xl border-2 border-b-6 transition-all hover:border-slate-700 cursor-pointer text-left ${
                   index === 0 ? 'bg-gradient-to-r from-yellow-50 to-amber-50 border-yellow-300' :
                   index === 1 ? 'bg-gradient-to-r from-slate-50 to-gray-50 border-slate-300' :
                   index === 2 ? 'bg-gradient-to-r from-orange-50 to-amber-50 border-orange-300' :
                   'bg-slate-50 border-slate-200'
                 }`}
+                title={`View ${player.username}'s answers`}
               >
                 <div className="flex items-center gap-4">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
@@ -1142,7 +1152,7 @@ function HostGameContent() {
                 <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                   {player.score || 0} pts
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -1154,6 +1164,7 @@ function HostGameContent() {
         onToggleMinimize={() => toggleSection('players')}
         onKickPlayer={handleKickPlayerClick}
         onKickAll={handleKickAllPlayersClick}
+        onPlayerClick={handlePlayerClick}
       />
 
       <QuestionForm
@@ -1333,6 +1344,57 @@ function HostGameContent() {
         buttonText="OK"
         showCloseButton={true}
       />
+
+      {/* Player Answers Modal */}
+      {showPlayerAnswersModal && selectedPlayer && game && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => {
+            setShowPlayerAnswersModal(false);
+            setSelectedPlayer(null);
+          }}
+        >
+          <div 
+            className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col transform transition-all duration-200 scale-100"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-slate-200">
+              <h2 className="text-2xl font-bold text-slate-800">
+                {selectedPlayer.username}'s Answers
+              </h2>
+              <button
+                onClick={() => {
+                  setShowPlayerAnswersModal(false);
+                  setSelectedPlayer(null);
+                }}
+                className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+                title="Close"
+              >
+                <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {game.questions && game.questions.length > 0 && game.playerAnswers ? (
+                <PlayerAnswersView
+                  questions={game.questions}
+                  playerAnswers={game.playerAnswers}
+                  playerId={selectedPlayer.id}
+                  playerUsername={selectedPlayer.username}
+                />
+              ) : (
+                <div className="text-center py-8 text-slate-500">
+                  <p>No answers available yet.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Import Modal */}
       {showImportModal && (

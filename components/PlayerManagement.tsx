@@ -14,6 +14,7 @@ interface PlayerManagementProps {
   onToggleMinimize: () => void;
   onKickPlayer: (playerId: string, username: string) => void;
   onKickAll?: () => void;
+  onPlayerClick?: (playerId: string, username: string) => void;
 }
 
 export default function PlayerManagement({
@@ -22,6 +23,7 @@ export default function PlayerManagement({
   onToggleMinimize,
   onKickPlayer,
   onKickAll,
+  onPlayerClick,
 }: PlayerManagementProps) {
   // Sort players by score (descending)
   const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -75,13 +77,24 @@ export default function PlayerManagement({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
               {sortedPlayers.map((player) => (
                 <div key={player.id} className="flex justify-between border border-b-4 border-slate-300 items-center p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl hover:border-slate-800 transition-all group">
-                  <span className="font-semibold text-slate-800">{player.username}</span>
+                  <button
+                    onClick={() => onPlayerClick?.(player.id, player.username)}
+                    className={`font-semibold text-slate-800 hover:text-blue-600 transition-colors ${
+                      onPlayerClick ? 'cursor-pointer hover:underline' : ''
+                    }`}
+                    title={onPlayerClick ? `View ${player.username}'s answers` : undefined}
+                  >
+                    {player.username}
+                  </button>
                   <div className="flex items-center gap-2">
                     <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full font-bold text-sm">
                       {player.score || 0} pts
                     </span>
                     <button
-                      onClick={() => onKickPlayer(player.id, player.username)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onKickPlayer(player.id, player.username);
+                      }}
                       className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all opacity-60 hover:opacity-100"
                       title={`Kick ${player.username}`}
                     >
