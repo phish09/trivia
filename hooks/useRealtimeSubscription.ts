@@ -7,6 +7,7 @@ interface UseRealtimeSubscriptionOptions {
   game: Game | null;
   onGameUpdate: () => void; // Callback when game data should be reloaded
   enablePolling?: boolean; // Enable polling as fallback (default: true)
+  onPlayerUpdate?: (payload: any) => void; // Optional: Incremental player update callback
 }
 
 /**
@@ -17,12 +18,13 @@ export function useRealtimeSubscription({
   game,
   onGameUpdate,
   enablePolling = true,
+  onPlayerUpdate,
 }: UseRealtimeSubscriptionOptions) {
   // Debounce update calls to prevent excessive renders
   const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastUpdateTimeRef = useRef<number>(0);
   const DEBOUNCE_MS_NORMAL = 500; // For player answers (less critical)
-  const DEBOUNCE_MS_FAST = 100; // For game state changes (host actions - more critical)
+  const DEBOUNCE_MS_FAST = 100; // For game state changes and player joins (more critical)
 
   const debouncedUpdate = useCallback((isGameStateChange = false) => {
     const now = Date.now();
@@ -100,9 +102,21 @@ export function useRealtimeSubscription({
           table: 'players',
           filter: `game_id=eq.${game.id}`,
         },
-        () => {
-          // Players changed (joined/left) - use normal debounce
-          debouncedUpdate(false);
+        (payload) => {
+          // Players changed (joined/left) - treat as critical for instant feedback
+          // If incremental update callback provided, use it for instant UI update
+          if (onPlayerUpdate) {
+            try {
+              onPlayerUpdate(payload);
+            } catch (error) {
+              console.error("Error in incremental player update:", error);
+              // Fallback to full reload on error
+              debouncedUpdate(true);
+            }
+          }
+          // Always trigger full reload as well (for score updates, etc.)
+          // But incremental update provides instant feedback
+          debouncedUpdate(true);
         }
       )
       .subscribe((status) => {
@@ -119,7 +133,7 @@ export function useRealtimeSubscription({
       }
       supabase.removeChannel(channel);
     };
-  }, [game?.id, game?.questions, debouncedUpdate]);
+  }, [game?.id, game?.questions, debouncedUpdate, onPlayerUpdate]);
 
   // Poll for updates as fallback (when there's an active question)
   // This ensures fill-in-the-blank and all answer types update automatically

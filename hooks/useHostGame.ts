@@ -38,6 +38,69 @@ export function useHostGame({ code }: UseHostGameOptions): UseHostGameReturn {
     }
   }, [code]);
 
+  // Incremental update function for player changes
+  // Provides instant UI feedback when players join/leave/update
+  const updatePlayersIncremental = useCallback((payload: any) => {
+    setGame((prevGame: any) => {
+      if (!prevGame) return prevGame;
+      
+      // Supabase realtime payload structure:
+      // - eventType: 'INSERT', 'UPDATE', or 'DELETE'
+      // - new: new row data (for INSERT/UPDATE)
+      // - old: old row data (for UPDATE/DELETE)
+      const eventType = payload.eventType;
+      const newPlayer = payload.new;
+      const oldPlayer = payload.old;
+      
+      if (eventType === 'INSERT' && newPlayer) {
+        // Player joined - add to list if not already present
+        const playerExists = prevGame.players?.some((p: any) => p.id === newPlayer.id);
+        if (!playerExists) {
+          console.log('[Realtime] Player joined:', newPlayer.username);
+          return {
+            ...prevGame,
+            players: [
+              ...(prevGame.players || []),
+              {
+                id: newPlayer.id,
+                username: newPlayer.username,
+                score: newPlayer.score || 0,
+                gameId: newPlayer.game_id,
+              },
+            ],
+          };
+        }
+      } else if (eventType === 'UPDATE' && newPlayer) {
+        // Player updated (e.g., score changed, username changed)
+        const playerIndex = prevGame.players?.findIndex((p: any) => p.id === newPlayer.id);
+        if (playerIndex !== undefined && playerIndex >= 0) {
+          console.log('[Realtime] Player updated:', newPlayer.username, 'score:', newPlayer.score);
+          return {
+            ...prevGame,
+            players: prevGame.players.map((p: any, idx: number) =>
+              idx === playerIndex
+                ? {
+                    ...p,
+                    username: newPlayer.username,
+                    score: newPlayer.score || 0,
+                  }
+                : p
+            ),
+          };
+        }
+      } else if (eventType === 'DELETE' && oldPlayer) {
+        // Player left - remove from list
+        console.log('[Realtime] Player left:', oldPlayer.username);
+        return {
+          ...prevGame,
+          players: (prevGame.players || []).filter((p: any) => p.id !== oldPlayer.id),
+        };
+      }
+      
+      return prevGame;
+    });
+  }, []);
+
   // Store loadGame in ref so it can be used in checkPassword
   loadGameRef.current = loadGame;
 
@@ -46,6 +109,7 @@ export function useHostGame({ code }: UseHostGameOptions): UseHostGameReturn {
     game,
     onGameUpdate: loadGame,
     enablePolling: true,
+    onPlayerUpdate: updatePlayersIncremental,
   });
 
   const checkPassword = useCallback(async () => {

@@ -1404,6 +1404,26 @@ function PlayPageContent() {
       return;
     }
 
+    // Optimistic update: Set submitted state immediately for instant UI feedback
+    setSubmitted(true);
+    
+    // Store current state for potential rollback
+    const previousSubmitted = submitted;
+    const previousSelectedAnswer = selectedAnswer;
+    const previousTextAnswer = textAnswer;
+    const previousTextAnswerDisplay = textAnswerDisplay;
+    
+    // Announce submission to screen readers immediately (only if answers aren't revealed yet)
+    if (!game?.answersRevealed) {
+      // Check if timer has expired
+      const timerExpired = currentQuestion.hasTimer && timeRemaining === 0;
+      if (timerExpired) {
+        setScreenReaderAnnouncement(`Waiting for ${game?.hostName || 'host'} to reveal the answer...`);
+      } else {
+        setScreenReaderAnnouncement("Answer submitted. Waiting for other players.");
+      }
+    }
+
     try {
       const wagerAmount = currentQuestion.hasWager && wager > 0 ? wager : undefined;
       const roundNumber = currentQuestion.roundNumber || null;
@@ -1418,7 +1438,7 @@ function PlayPageContent() {
         await submitAnswer(playerId, currentQuestion.id, selectedAnswer, undefined, wagerForBonus || wagerAmount, slotToSubmit, roundNumber);
       }
       
-      // Track answer submission
+      // Track answer submission (only after successful server submission)
       const questionType = currentQuestion.isFillInBlank ? 'fill_in_blank'
         : currentQuestion.isTrueFalse ? 'true_false'
         : 'multiple_choice';
@@ -1428,24 +1448,21 @@ function PlayPageContent() {
         currentQuestion.hasWager || false
       );
       
-      setSubmitted(true);
-      
-      // Announce submission to screen readers (only if answers aren't revealed yet)
-      if (!game?.answersRevealed) {
-        // Check if timer has expired
-        const timerExpired = currentQuestion.hasTimer && timeRemaining === 0;
-        if (timerExpired) {
-          setScreenReaderAnnouncement(`Waiting for ${game?.hostName || 'host'} to reveal the answer...`);
-        } else {
-          setScreenReaderAnnouncement("Answer submitted. Waiting for other players.");
-        }
-      }
-      
-      // Refresh game state after submitting answer
-      await loadGame();
+      // Refresh game state after submitting answer (non-blocking, happens in background)
+      // This syncs the server state but doesn't block the UI
+      loadGame().catch((err) => {
+        console.error("Failed to refresh game state after submission:", err);
+        // Non-critical error - answer was submitted successfully, just couldn't refresh
+      });
     } catch (error: any) {
       console.error("Failed to submit answer:", error);
       const errorMessage = error?.message || "Failed to submit answer. Please try again.";
+      
+      // Rollback optimistic update on error
+      setSubmitted(previousSubmitted);
+      setSelectedAnswer(previousSelectedAnswer);
+      setTextAnswer(previousTextAnswer);
+      setTextAnswerDisplay(previousTextAnswerDisplay);
       
       // If player not found, redirect to join page
       if (errorMessage.includes("Player not found") || errorMessage.includes("rejoin")) {
