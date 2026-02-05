@@ -926,9 +926,9 @@ export async function revealAnswers(gameId: string, questionId: string) {
       );
       
       const results = await Promise.all(updatePromises);
-      const errors = results.filter(r => r.error).map(r => r.error);
-      if (errors.length > 0) {
-        throw new Error(`Failed to update default answers: ${errors[0].message}`);
+      const errors = results.filter(r => r.error != null);
+      if (errors.length > 0 && errors[0]?.error) {
+        throw new Error(`Failed to update default answers: ${errors[0].error.message}`);
       }
     }
     
@@ -1011,9 +1011,9 @@ export async function revealAnswers(gameId: string, questionId: string) {
       );
       
       const results = await Promise.all(updatePromises);
-      const errors = results.filter(r => r.error).map(r => r.error);
-      if (errors.length > 0) {
-        throw new Error(`Failed to update some answers: ${errors[0].message}`);
+      const errors = results.filter(r => r.error != null);
+      if (errors.length > 0 && errors[0]?.error) {
+        throw new Error(`Failed to update some answers: ${errors[0].error.message}`);
       }
     }
     
@@ -1027,9 +1027,9 @@ export async function revealAnswers(gameId: string, questionId: string) {
       );
       
       const results = await Promise.all(updatePromises);
-      const errors = results.filter(r => r.error).map(r => r.error);
-      if (errors.length > 0) {
-        throw new Error(`Failed to update some scores: ${errors[0].message}`);
+      const errors = results.filter(r => r.error != null);
+      if (errors.length > 0 && errors[0]?.error) {
+        throw new Error(`Failed to update some scores: ${errors[0].error.message}`);
       }
     }
     
@@ -1143,9 +1143,9 @@ export async function revealAnswers(gameId: string, questionId: string) {
     );
     
     const results = await Promise.all(updatePromises);
-    const errors = results.filter(r => r.error).map(r => r.error);
-    if (errors.length > 0) {
-      throw new Error(`Failed to update some answers: ${errors[0].message}`);
+    const errors = results.filter(r => r.error != null);
+    if (errors.length > 0 && errors[0]?.error) {
+      throw new Error(`Failed to update some answers: ${errors[0].error.message}`);
     }
   }
   
@@ -1159,9 +1159,9 @@ export async function revealAnswers(gameId: string, questionId: string) {
     );
     
     const results = await Promise.all(updatePromises);
-    const errors = results.filter(r => r.error).map(r => r.error);
-    if (errors.length > 0) {
-      throw new Error(`Failed to update some scores: ${errors[0].message}`);
+    const errors = results.filter(r => r.error != null);
+    if (errors.length > 0 && errors[0]?.error) {
+      throw new Error(`Failed to update some scores: ${errors[0].error.message}`);
     }
   }
 
