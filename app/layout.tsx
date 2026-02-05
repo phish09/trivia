@@ -139,6 +139,14 @@ export default function RootLayout({
             gtag('config', 'G-BZKD379TWB');
           `}
         </Script>
+        
+        {/* Google AdSense */}
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5460760645764983"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
         <div className="relative z-10">
           {children}
         </div>
