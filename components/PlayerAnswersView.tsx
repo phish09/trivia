@@ -30,6 +30,7 @@ interface PlayerAnswersViewProps {
   playerAnswers: PlayerAnswer[];
   playerId: string;
   playerUsername: string;
+  currentQuestionIndex: number | null; // Track which questions have been asked
 }
 
 export default function PlayerAnswersView({
@@ -37,14 +38,28 @@ export default function PlayerAnswersView({
   playerAnswers,
   playerId,
   playerUsername,
+  currentQuestionIndex,
 }: PlayerAnswersViewProps) {
-  const sortedQuestions = [...questions].sort(
+  // Only show questions that have already been asked
+  // A question has been asked if its order is <= currentQuestionIndex
+  // If currentQuestionIndex is null, no questions have been asked yet
+  const askedQuestions = currentQuestionIndex !== null
+    ? questions.filter(q => (q.questionOrder || 0) <= currentQuestionIndex)
+    : [];
+  
+  const sortedQuestions = [...askedQuestions].sort(
     (a, b) => (a.questionOrder || 0) - (b.questionOrder || 0)
   );
 
   return (
     <div className="space-y-2 max-h-[70vh] overflow-y-auto">
-      {sortedQuestions.map((question, index) => {
+      {sortedQuestions.length === 0 ? (
+        <div className="text-center py-8 text-slate-500">
+          <p className="font-medium">No questions have been asked yet.</p>
+          <p className="text-sm mt-2">Answers will appear here once questions are activated.</p>
+        </div>
+      ) : (
+        sortedQuestions.map((question, index) => {
         const playerAnswer = playerAnswers.find(
           (pa) => pa.playerId === playerId && pa.questionId === question.id
         );
@@ -264,7 +279,7 @@ export default function PlayerAnswersView({
             )}
           </div>
         );
-      })}
+      }))}
     </div>
   );
 }

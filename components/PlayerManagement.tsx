@@ -15,6 +15,7 @@ interface PlayerManagementProps {
   onKickPlayer: (playerId: string, username: string) => void;
   onKickAll?: () => void;
   onPlayerClick?: (playerId: string, username: string) => void;
+  onRefresh?: () => void;
 }
 
 export default function PlayerManagement({
@@ -24,6 +25,7 @@ export default function PlayerManagement({
   onKickPlayer,
   onKickAll,
   onPlayerClick,
+  onRefresh,
 }: PlayerManagementProps) {
   // Sort players by score (descending)
   const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -42,6 +44,19 @@ export default function PlayerManagement({
           }`}>
             {players.length} / {MAX_PLAYERS_PER_GAME}
           </span>
+          {onRefresh && (
+            <button
+              className="border border-b-3 border-slate-600 px-4 py-2 text-sm bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 font-medium transition-all shadow-sm hover:shadow"
+              onClick={onRefresh}
+              title="Refresh player list"
+            >
+              <span className="flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </span>
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {!minimized && players.length > 0 && onKickAll && (

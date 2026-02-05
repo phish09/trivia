@@ -1165,6 +1165,7 @@ function HostGameContent() {
         onKickPlayer={handleKickPlayerClick}
         onKickAll={handleKickAllPlayersClick}
         onPlayerClick={handlePlayerClick}
+        onRefresh={loadGame}
       />
 
       <QuestionForm
@@ -1385,6 +1386,7 @@ function HostGameContent() {
                   playerAnswers={game.playerAnswers}
                   playerId={selectedPlayer.id}
                   playerUsername={selectedPlayer.username}
+                  currentQuestionIndex={game.currentQuestionIndex}
                 />
               ) : (
                 <div className="text-center py-8 text-slate-500">
