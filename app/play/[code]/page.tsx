@@ -341,10 +341,10 @@ function PlayPageContent() {
   // This prevents rapid-fire requests when multiple realtime events fire quickly
   function throttledLoadGame(isCritical = false) {
     const now = Date.now();
-    // Increased throttle times to reduce costs:
-    // - Critical updates: 200ms (was 50ms) - still fast but reduces rapid calls
-    // - Non-critical updates: 1000ms (was 200ms) - much less frequent for player answers
-    const THROTTLE_MS = isCritical ? 200 : 1000; 
+    // Reduced throttle times for faster response:
+    // - Critical updates: 50ms (was 200ms) - very fast for next question, game ended, etc.
+    // - Non-critical updates: 1000ms (unchanged) - for player answers
+    const THROTTLE_MS = isCritical ? 50 : 1000; 
     const timeSinceLastLoad = now - lastLoadGameTimeRef.current;
 
     if (loadGameThrottleRef.current) {
@@ -696,15 +696,31 @@ function PlayPageContent() {
           // Optimistic update: immediately update UI based on payload
           const newData = payload.new as any;
           if (newData) {
+            // Check if answers are being revealed (most critical - needs immediate load)
+            const isAnswersRevealed = 
+              newData.answers_revealed !== undefined && 
+              newData.answers_revealed !== game?.answersRevealed &&
+              newData.answers_revealed === true;
+            
             // Check if this is a critical update (reveal answers, next question, or timer start)
             const isCritical = 
-              (newData.answers_revealed !== undefined && newData.answers_revealed !== game?.answersRevealed) ||
+              isAnswersRevealed ||
               (newData.current_question_index !== undefined && newData.current_question_index !== game?.currentQuestionIndex) ||
               (newData.game_ended !== undefined && newData.game_ended !== game?.gameEnded) ||
               (newData.question_start_time !== undefined && newData.question_start_time !== game?.questionStartTime);
             
             // Always update questionStartTime if present (critical for timer to work)
             const hasTimerUpdate = newData.question_start_time !== undefined;
+            
+            // Debug: log all realtime updates to verify they're working
+            console.log('[Realtime] Game update received:', {
+              answers_revealed: newData.answers_revealed,
+              previous_answers_revealed: game?.answersRevealed,
+              isAnswersRevealed,
+              current_question_index: newData.current_question_index,
+              game_ended: newData.game_ended,
+              timestamp: new Date().toISOString()
+            });
             
             // Debug: log timer-related updates
             if (hasTimerUpdate) {
@@ -779,15 +795,26 @@ function PlayPageContent() {
               });
             }
             
-            // Use throttled loadGame for all updates to reduce costs
-            // Critical updates use faster throttle (200ms), non-critical use slower (1000ms)
-            // This ensures players see updates quickly while reducing database calls
-            if (isCritical || (hasTimerUpdate && newData.question_start_time !== null)) {
-              // Critical update - use fast throttle (200ms) instead of immediate
-              // Still very fast but prevents rapid-fire calls if multiple events fire
+            // Load game data immediately for answer reveals (no throttling)
+            // This is critical for player experience - answers must appear instantly
+            if (isAnswersRevealed) {
+              console.log('[Realtime] Answer reveal detected - loading immediately (no throttle)');
               lastRealtimeUpdateRef.current = Date.now();
-              throttledLoadGame(true); // Use critical throttle (200ms)
+              // Clear any pending throttled load
+              if (loadGameThrottleRef.current) {
+                clearTimeout(loadGameThrottleRef.current);
+                loadGameThrottleRef.current = null;
+              }
+              // Load immediately
+              lastLoadGameTimeRef.current = Date.now();
+              loadGame();
+            } else if (isCritical || (hasTimerUpdate && newData.question_start_time !== null)) {
+              // Other critical updates - use minimal throttle (50ms) for rapid response
+              console.log('[Realtime] Critical update - using minimal throttle (50ms)');
+              lastRealtimeUpdateRef.current = Date.now();
+              throttledLoadGame(true); // Use critical throttle (50ms)
             } else {
+              // Non-critical updates - use normal throttle
               throttledLoadGame(false); // Use non-critical throttle (1000ms)
             }
           } else {
