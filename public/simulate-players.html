@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Simulator - Trivia</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .info-box {
+            background: #f0f4ff;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .progress {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 24px;
+            background: #e0e0e0;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .stats {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        .stat {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #667eea;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 Player Simulator</h1>
+        <p class="subtitle">Programmatically simulate multiple players joining a trivia game</p>
+        
+        <form id="simulatorForm">
+            <div class="form-group">
+                <label for="gameCode">Game Code</label>
+                <input 
+                    type="text" 
+                    id="gameCode" 
+                    placeholder="Enter 5-digit game code" 
+                    maxlength="5"
+                    inputmode="numeric"
+                    required
+                />
+            </div>
+            
+            <div class="form-group">
+                <label for="playerCount">Number of Players</label>
+                <input 
+                    type="number" 
+                    id="playerCount" 
+                    placeholder="e.g., 20" 
+                    min="1" 
+                    max="100"
+                    value="20"
+                    required
+                />
+            </div>
+            
+            <div class="form-group">
+                <label for="baseUrl">Base URL (optional)</label>
+                <input 
+                    type="text" 
+                    id="baseUrl" 
+                    placeholder="http://localhost:3000 (default)"
+                    value="http://localhost:3000"
+                />
+            </div>
+            
+            <div class="form-group">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input 
+                        type="checkbox" 
+                        id="autoAnswer" 
+                        checked
+                        style="width: auto; margin-right: 8px; cursor: pointer;"
+                    />
+                    <span>Automatically submit random answers when questions are active</span>
+                </label>
+            </div>
+            
+            <button type="submit" id="simulateBtn">Join Players</button>
+        </form>
+        
+        <div id="status" class="status"></div>
+        
+        <div id="progress" class="progress" style="display: none;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                <span>Joining players...</span>
+                <span id="progressText">0 / 0</span>
+            </div>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+            </div>
+        </div>
+        
+        <div id="pollingStatus" class="status" style="display: none;">
+            <span id="pollingStatusText"></span>
+        </div>
+        
+        <div id="stats" class="stats" style="display: none;">
+            <div class="stat">
+                <div class="stat-value" id="statJoined">0</div>
+                <div class="stat-label">Joined</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="statFailed">0</div>
+                <div class="stat-label">Failed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="statAnswers">0</div>
+                <div class="stat-label">Answers</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="statTime">0s</div>
+                <div class="stat-label">Time</div>
+            </div>
+        </div>
+        
+        <div class="info-box">
+            <strong>📝 How it works:</strong>
+            <ul style="margin-top: 10px; padding-left: 20px;">
+                <li>This simulator programmatically joins players via API calls</li>
+                <li>No browser tabs are opened - it's all done in the background</li>
+                <li>Use this to test realtime performance with many players</li>
+                <li>Check the host view to see all players join and test answer reveals</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        console.log('=== PLAYER SIMULATOR LOADED ===');
+        console.log('If you see this message, JavaScript is working!');
+        
+        const form = document.getElementById('simulatorForm');
+        const status = document.getElementById('status');
+        const progress = document.getElementById('progress');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+        const stats = document.getElementById('stats');
+        const statJoined = document.getElementById('statJoined');
+        const statFailed = document.getElementById('statFailed');
+        const statAnswers = document.getElementById('statAnswers');
+        const statTime = document.getElementById('statTime');
+        const simulateBtn = document.getElementById('simulateBtn');
+        
+        let playerIds = [];
+        let answerPollInterval = null;
+        let submittedQuestionIds = new Set();
+        
+        // Restrict game code input to numbers only
+        const gameCodeInput = document.getElementById('gameCode');
+        gameCodeInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, '');
+        });
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            console.log('=== FORM SUBMITTED ===');
+            
+            const gameCode = document.getElementById('gameCode').value.trim();
+            const playerCount = parseInt(document.getElementById('playerCount').value);
+            const baseUrl = document.getElementById('baseUrl').value.trim() || 'http://localhost:3000';
+            
+            console.log('Form values:', { gameCode, playerCount, baseUrl });
+            
+            // Validate game code is exactly 5 digits
+            if (!gameCode || gameCode.length !== 5 || !/^\d{5}$/.test(gameCode)) {
+                showStatus('Please enter a valid 5-digit game code (numbers only)', 'error');
+                gameCodeInput.focus();
+                return;
+            }
+            
+            if (playerCount < 1 || playerCount > 100) {
+                showStatus('Please enter a number of players between 1 and 100', 'error');
+                return;
+            }
+            
+            // Reset UI
+            simulateBtn.disabled = true;
+            stats.style.display = 'none';
+            progress.style.display = 'block';
+            statJoined.textContent = '0';
+            statFailed.textContent = '0';
+            statAnswers.textContent = '0';
+            statTime.textContent = '0s';
+            
+            // Reset state
+            playerIds = [];
+            submittedQuestionIds.clear();
+            if (answerPollInterval) {
+                clearInterval(answerPollInterval);
+                answerPollInterval = null;
+            }
+            
+            const startTime = Date.now();
+            let joined = 0;
+            let failed = 0;
+            
+            console.log(`Starting to join ${playerCount} players...`);
+            
+            // Join players with a small delay between each to avoid overwhelming the server
+            const joinPromises = [];
+            
+            for (let i = 0; i < playerCount; i++) {
+                const playerIndex = i;
+                console.log(`Setting up join for player ${playerIndex + 1}`);
+                const joinPromise = new Promise((resolve) => {
+                    setTimeout(async () => {
+                        console.log(`Attempting to join player ${playerIndex + 1}...`);
+                        try {
+                            const url = `${baseUrl}/api/simulate-join`;
+                            console.log(`Fetching: ${url} for Player ${playerIndex + 1}`);
+                            const response = await fetch(url, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    code: gameCode,
+                                    username: `Player ${playerIndex + 1}`
+                                })
+                            });
+                            
+                            console.log(`Response received for Player ${playerIndex + 1}:`, response.status, response.statusText);
+                            const data = await response.json();
+                            console.log(`Response data for Player ${playerIndex + 1}:`, data);
+                            
+                            if (response.ok && data.success) {
+                                joined++;
+                                console.log(`✓ Player ${playerIndex + 1} joined successfully`);
+                                // Store player ID for answer submission
+                                if (data.player && data.player.id) {
+                                    playerIds.push(data.player.id);
+                                    console.log(`  → Stored player ID: ${data.player.id}`);
+                                    console.log(`  → Total player IDs stored: ${playerIds.length}`);
+                                } else {
+                                    console.warn(`⚠ Player ${playerIndex + 1} joined but no player ID in response:`, data);
+                                }
+                            } else {
+                                failed++;
+                                console.error(`✗ Failed to join player ${playerIndex + 1}:`, data.error || 'Unknown error');
+                            }
+                        } catch (error) {
+                            failed++;
+                            console.error(`Error joining player ${playerIndex + 1}:`, error);
+                        }
+                        
+                        // Update progress
+                        const total = joined + failed;
+                        const percent = Math.round((total / playerCount) * 100);
+                        progressFill.style.width = `${percent}%`;
+                        progressFill.textContent = `${percent}%`;
+                        progressText.textContent = `${total} / ${playerCount}`;
+                        statJoined.textContent = joined;
+                        statFailed.textContent = failed;
+                        
+                        const elapsed = Math.round((Date.now() - startTime) / 1000);
+                        statTime.textContent = `${elapsed}s`;
+                        
+                        resolve();
+                    }, playerIndex * 50); // 50ms delay between each join
+                });
+                
+                joinPromises.push(joinPromise);
+            }
+            
+            // Wait for all joins to complete
+            console.log('Waiting for all join promises to complete...');
+            await Promise.all(joinPromises);
+            console.log('All join promises completed!');
+            console.log(`Final stats: ${joined} joined, ${failed} failed`);
+            console.log(`Player IDs stored:`, playerIds);
+            console.log(`Total player IDs: ${playerIds.length}`);
+            
+            const totalTime = Math.round((Date.now() - startTime) / 1000);
+            stats.style.display = 'grid';
+            statAnswers.textContent = '0';
+            
+            if (failed === 0) {
+                showStatus(`Successfully joined ${joined} players in ${totalTime} seconds!`, 'success');
+            } else {
+                showStatus(`Joined ${joined} players, ${failed} failed in ${totalTime} seconds.`, failed === playerCount ? 'error' : 'info');
+            }
+            
+            // Start polling for questions if auto-answer is enabled
+            const autoAnswer = document.getElementById('autoAnswer').checked;
+            const pollingStatusEl = document.getElementById('pollingStatus');
+            const pollingStatusText = document.getElementById('pollingStatusText');
+            
+            console.log(`Auto-answer: ${autoAnswer}, Player IDs count: ${playerIds.length}`);
+            if (autoAnswer) {
+                if (playerIds.length > 0) {
+                    showStatus(`Successfully joined ${joined} players. Starting answer monitoring...`, 'success');
+                    pollingStatusEl.style.display = 'block';
+                    pollingStatusEl.className = 'status info';
+                    pollingStatusText.textContent = `🔄 Monitoring for active questions (${playerIds.length} players ready). Open browser console (F12) for detailed logs.`;
+                    startAnswerPolling(gameCode, baseUrl);
+                } else {
+                    showStatus('Warning: No player IDs were stored. Answer submission may not work. Check console for details.', 'error');
+                    pollingStatusEl.style.display = 'block';
+                    pollingStatusEl.className = 'status error';
+                    pollingStatusText.textContent = '⚠️ No player IDs stored - answer submission disabled';
+                }
+            } else {
+                pollingStatusEl.style.display = 'none';
+            }
+            
+            simulateBtn.disabled = false;
+        });
+        
+        function showStatus(message, type) {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.style.display = 'block';
+        }
+        
+        function startAnswerPolling(gameCode, baseUrl) {
+            // Clear any existing interval
+            if (answerPollInterval) {
+                clearInterval(answerPollInterval);
+            }
+            
+            console.log('=== STARTING ANSWER POLLING ===');
+            console.log(`Game Code: ${gameCode}`);
+            console.log(`Base URL: ${baseUrl}`);
+            console.log(`Player IDs:`, playerIds);
+            console.log(`Player Count: ${playerIds.length}`);
+            
+            // Poll immediately first, then every 2 seconds
+            const pollForQuestions = async () => {
+                const timestamp = new Date().toLocaleTimeString();
+                console.log(`[${timestamp}] Polling for active questions...`);
+                
+                const pollingStatusEl = document.getElementById('pollingStatus');
+                const pollingStatusText = document.getElementById('pollingStatusText');
+                if (pollingStatusEl && pollingStatusText) {
+                    pollingStatusText.textContent = `🔄 Last checked: ${timestamp} - Monitoring for active questions...`;
+                }
+                
+                try {
+                    const url = `${baseUrl}/api/simulate-game-info?code=${gameCode}`;
+                    console.log(`Fetching: ${url}`);
+                    const response = await fetch(url);
+                    
+                    if (!response.ok) {
+                        console.error(`HTTP Error: ${response.status} ${response.statusText}`);
+                        return;
+                    }
+                    
+                    const data = await response.json();
+                    console.log('Response received:', data);
+                    
+                    if (!data.success) {
+                        console.error('Failed to get game info:', data.error);
+                        return;
+                    }
+                    
+                    if (data.game) {
+                        const game = data.game;
+                        
+                        console.log('Game state:', {
+                            currentQuestionIndex: game.currentQuestionIndex,
+                            answersRevealed: game.answersRevealed,
+                            questionsCount: game.questions?.length || 0,
+                            playerIdsCount: playerIds.length
+                        });
+                        
+                        // Check if there's an active question
+                        if (game.currentQuestionIndex !== null && 
+                            game.currentQuestionIndex !== undefined && 
+                            !game.answersRevealed &&
+                            game.questions && 
+                            game.questions.length > game.currentQuestionIndex &&
+                            game.questions[game.currentQuestionIndex]) {
+                            
+                            const question = game.questions[game.currentQuestionIndex];
+                            const questionId = question.id;
+                            
+                            console.log('✓ Active question found:', {
+                                questionId,
+                                questionText: question.text?.substring(0, 50),
+                                isFillInBlank: question.isFillInBlank,
+                                isTrueFalse: question.isTrueFalse,
+                                choicesCount: question.choices?.length || 0
+                            });
+                            
+                            // Only submit answers if we haven't already submitted for this question
+                            if (!submittedQuestionIds.has(questionId)) {
+                                console.log(`→ Submitting answers for question ${questionId}...`);
+                                const pollingStatusText = document.getElementById('pollingStatusText');
+                                if (pollingStatusText) {
+                                    pollingStatusText.textContent = `✅ Active question found! Submitting answers from ${playerIds.length} players...`;
+                                }
+                                submittedQuestionIds.add(questionId);
+                                await submitAnswersForQuestion(question, playerIds, baseUrl);
+                                
+                                // Update status after submission
+                                const answersCount = parseInt(document.getElementById('statAnswers').textContent) || 0;
+                                if (pollingStatusText) {
+                                    pollingStatusText.textContent = `✅ Submitted ${answersCount} answers. Monitoring for next question...`;
+                                }
+                            } else {
+                                console.log(`⚠ Already submitted answers for question ${questionId}`);
+                            }
+                        } else {
+                            console.log('✗ No active question. Conditions:', {
+                                hasCurrentIndex: game.currentQuestionIndex !== null && game.currentQuestionIndex !== undefined,
+                                answersRevealed: game.answersRevealed,
+                                hasQuestions: !!game.questions,
+                                questionsLength: game.questions?.length || 0,
+                                currentIndex: game.currentQuestionIndex
+                            });
+                        }
+                    } else {
+                        console.error('No game data in response');
+                    }
+                } catch (error) {
+                    console.error('❌ Error polling for questions:', error);
+                }
+            };
+            
+            // Poll immediately
+            pollForQuestions();
+            
+            // Then poll every 2 seconds
+            answerPollInterval = setInterval(pollForQuestions, 2000);
+            
+            console.log('Polling interval set up. Will check every 2 seconds.');
+        }
+        
+        async function submitAnswersForQuestion(question, playerIds, baseUrl) {
+            console.log(`Submitting answers for ${playerIds.length} players for question ${question.id}`);
+            
+            let answersSubmitted = 0;
+            let answersFailed = 0;
+            
+            // Submit answers for each player with random delays
+            const submitPromises = playerIds.map((playerId, index) => {
+                return new Promise((resolve) => {
+                    setTimeout(async () => {
+                        try {
+                            let answerIndex = null;
+                            let textAnswer = null;
+                            
+                            // Determine answer type and generate random answer
+                            if (question.isFillInBlank) {
+                                // Fill in the blank - generate a random text answer
+                                const randomAnswers = [
+                                    'Answer', 'Solution', 'Response', 'Result', 
+                                    'Option', 'Choice', 'Selection', 'Pick'
+                                ];
+                                textAnswer = randomAnswers[Math.floor(Math.random() * randomAnswers.length)];
+                                console.log(`Player ${playerId} submitting fill-in-blank answer: ${textAnswer}`);
+                            } else if (question.isTrueFalse) {
+                                // True/False - randomly choose 0 (True) or 1 (False)
+                                answerIndex = Math.floor(Math.random() * 2);
+                                console.log(`Player ${playerId} submitting true/false answer: ${answerIndex}`);
+                            } else if (question.choices && question.choices.length > 0) {
+                                // Multiple choice - randomly choose an option
+                                answerIndex = Math.floor(Math.random() * question.choices.length);
+                                console.log(`Player ${playerId} submitting multiple choice answer: ${answerIndex} (${question.choices[answerIndex]})`);
+                            } else {
+                                // Fallback - skip this question type
+                                console.warn(`Unknown question type for question ${question.id}`);
+                                resolve();
+                                return;
+                            }
+                            
+                            const response = await fetch(`${baseUrl}/api/simulate-submit-answer`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                },
+                                body: JSON.stringify({
+                                    playerId: playerId,
+                                    questionId: question.id,
+                                    answerIndex: answerIndex,
+                                    textAnswer: textAnswer
+                                })
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (response.ok && data.success) {
+                                answersSubmitted++;
+                                const current = parseInt(statAnswers.textContent) || 0;
+                                statAnswers.textContent = current + 1;
+                                console.log(`✓ Player ${playerId} answer submitted successfully`);
+                            } else {
+                                answersFailed++;
+                                console.error(`✗ Player ${playerId} answer submission failed:`, data.error);
+                            }
+                        } catch (error) {
+                            answersFailed++;
+                            console.error(`✗ Error submitting answer for player ${playerId}:`, error);
+                        }
+                        resolve();
+                    }, Math.random() * 3000); // Random delay up to 3 seconds to simulate real player behavior
+                });
+            });
+            
+            await Promise.all(submitPromises);
+            console.log(`Answer submission complete: ${answersSubmitted} succeeded, ${answersFailed} failed`);
+        }
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (answerPollInterval) {
+                clearInterval(answerPollInterval);
+            }
+        });
+        
+        // Auto-fill game code from URL if present
+        const urlParams = new URLSearchParams(window.location.search);
+        const codeParam = urlParams.get('code');
+        if (codeParam) {
+            document.getElementById('gameCode').value = codeParam;
+        }
+    </script>
+</body>
+</html>

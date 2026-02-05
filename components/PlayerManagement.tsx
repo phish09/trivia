@@ -13,6 +13,7 @@ interface PlayerManagementProps {
   minimized: boolean;
   onToggleMinimize: () => void;
   onKickPlayer: (playerId: string, username: string) => void;
+  onKickAll?: () => void;
 }
 
 export default function PlayerManagement({
@@ -20,6 +21,7 @@ export default function PlayerManagement({
   minimized,
   onToggleMinimize,
   onKickPlayer,
+  onKickAll,
 }: PlayerManagementProps) {
   // Sort players by score (descending)
   const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -39,15 +41,26 @@ export default function PlayerManagement({
             {players.length} / {MAX_PLAYERS_PER_GAME}
           </span>
         </div>
-        <button
-          onClick={onToggleMinimize}
-          className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
-          title={minimized ? "Expand" : "Minimize"}
-        >
-          <svg className={`w-5 h-5 text-slate-600 transition-transform ${minimized ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {!minimized && players.length > 0 && onKickAll && (
+            <button
+              onClick={onKickAll}
+              className="px-3 py-1.5 text-sm font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all border border-red-300 hover:border-red-400"
+              title="Kick all players"
+            >
+              Kick all players
+            </button>
+          )}
+          <button
+            onClick={onToggleMinimize}
+            className="p-2 hover:bg-slate-100 rounded-lg transition-colors"
+            title={minimized ? "Expand" : "Minimize"}
+          >
+            <svg className={`w-5 h-5 text-slate-600 transition-transform ${minimized ? '' : 'rotate-180'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+          </button>
+        </div>
       </div>
       {!minimized && (
         <>

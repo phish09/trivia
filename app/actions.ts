@@ -161,6 +161,22 @@ export async function kickPlayer(playerId: string) {
   if (error) throw new Error(error.message);
 }
 
+export async function kickAllPlayers(gameId: string) {
+  const supabase = getSupabaseClient();
+  const { error } = await supabase
+    .from("players")
+    .delete()
+    .eq("game_id", gameId);
+  
+  if (error) throw new Error(error.message);
+  
+  // Update game activity when players are kicked
+  await supabase
+    .from("games")
+    .update({ last_activity: new Date().toISOString() })
+    .eq("id", gameId);
+}
+
 export async function joinGame(code: string, username: string, existingPlayerId?: string | null): Promise<JoinGameResult> {
   const supabase = getSupabaseClient();
   const { data: game, error: gameError } = await supabase
@@ -867,28 +883,60 @@ export async function revealAnswers(gameId: string, questionId: string) {
   // These values were already set by manuallyAwardPoints and must be preserved
   // True/false questions are handled the same as multiple choice (they use answer_index: 0 for True, 1 for False)
   if (question.is_fill_in_blank) {
+    // OPTIMIZATION: Batch fetch all player scores at once
+    const playerIds = answers.map(a => a.player_id).filter((id, index, self) => self.indexOf(id) === index);
+    const { data: players } = await supabase
+      .from("players")
+      .select("id, score")
+      .in("id", playerIds);
+    
+    const playerScores = new Map((players || []).map(p => [p.id, p.score || 0]));
+    
     // For fill-in-the-blank questions, we need to ensure manually scored answers preserve their status
     // We explicitly do NOT update is_correct or points_earned for manually_scored answers
     // Only set defaults for answers that haven't been manually scored yet
+    const defaultAnswerUpdates: Array<{ id: string; is_correct: boolean; points_earned: number; manually_scored: boolean }> = [];
+    
     for (const answer of answers) {
       if (!answer.manually_scored) {
         // If answer hasn't been manually scored, set default values (0 points, incorrect)
         // This ensures all answers have a status when revealed
-        await supabase
-          .from("player_answers")
-          .update({
-            is_correct: false,
-            points_earned: 0,
-            manually_scored: false,
-          })
-          .eq("id", answer.id);
+        defaultAnswerUpdates.push({
+          id: answer.id,
+          is_correct: false,
+          points_earned: 0,
+          manually_scored: false,
+        });
       }
       // If manually_scored is true, we explicitly do NOT touch is_correct or points_earned
       // These were set by manuallyAwardPoints and must be preserved exactly as-is
     }
     
+    // OPTIMIZATION: Parallel update defaults for unscored answers
+    if (defaultAnswerUpdates.length > 0) {
+      const updatePromises = defaultAnswerUpdates.map(update =>
+        supabase
+          .from("player_answers")
+          .update({
+            is_correct: update.is_correct,
+            points_earned: update.points_earned,
+            manually_scored: update.manually_scored,
+          })
+          .eq("id", update.id)
+      );
+      
+      const results = await Promise.all(updatePromises);
+      const errors = results.filter(r => r.error).map(r => r.error);
+      if (errors.length > 0) {
+        throw new Error(`Failed to update default answers: ${errors[0].message}`);
+      }
+    }
+    
     // Now update player scores based on the points_earned values
     // This is when scores should actually change for fill-in-the-blank questions
+    const answerUpdates: Array<{ id: string; points_earned: number }> = [];
+    const scoreUpdates: Array<{ id: string; score: number }> = [];
+    
     for (const answer of answers) {
       const basePointsEarned = answer.points_earned || 0;
       const isCorrect = answer.is_correct || false;
@@ -934,31 +982,55 @@ export async function revealAnswers(gameId: string, questionId: string) {
         }
       }
       
-      // Get current player score
-      const { data: player } = await supabase
-        .from("players")
-        .select("score")
-        .eq("id", answer.player_id)
-        .single();
-
-      const currentScore = player?.score || 0;
+      const currentScore = playerScores.get(answer.player_id) || 0;
       // For fill-in-the-blank, we add the final points earned (accounting for wagering)
       // Since this is the first time scores are being applied, we just add the points
       const newScore = currentScore + finalPointsEarned;
 
-      // Update player answer with final points earned (for display purposes)
-      await supabase
-        .from("player_answers")
-        .update({
-          points_earned: finalPointsEarned,
-        })
-        .eq("id", answer.id);
-
-      // Update player score (allow negative scores for wagering)
-      await supabase
-        .from("players")
-        .update({ score: newScore })
-        .eq("id", answer.player_id);
+      // Collect updates for batch processing
+      answerUpdates.push({
+        id: answer.id,
+        points_earned: finalPointsEarned,
+      });
+      
+      scoreUpdates.push({
+        id: answer.player_id,
+        score: newScore,
+      });
+    }
+    
+    // OPTIMIZATION: Parallel update all player answers
+    if (answerUpdates.length > 0) {
+      const updatePromises = answerUpdates.map(update =>
+        supabase
+          .from("player_answers")
+          .update({
+            points_earned: update.points_earned,
+          })
+          .eq("id", update.id)
+      );
+      
+      const results = await Promise.all(updatePromises);
+      const errors = results.filter(r => r.error).map(r => r.error);
+      if (errors.length > 0) {
+        throw new Error(`Failed to update some answers: ${errors[0].message}`);
+      }
+    }
+    
+    // OPTIMIZATION: Parallel update all player scores
+    if (scoreUpdates.length > 0) {
+      const updatePromises = scoreUpdates.map(update =>
+        supabase
+          .from("players")
+          .update({ score: update.score })
+          .eq("id", update.id)
+      );
+      
+      const results = await Promise.all(updatePromises);
+      const errors = results.filter(r => r.error).map(r => r.error);
+      if (errors.length > 0) {
+        throw new Error(`Failed to update some scores: ${errors[0].message}`);
+      }
     }
     
     // Mark answers as revealed - manually scored answers keep their is_correct and points_earned values
@@ -977,6 +1049,21 @@ export async function revealAnswers(gameId: string, questionId: string) {
 
   // Calculate scores and update player answers (for multiple choice and true/false questions)
   // True/false questions use answer_index: 0 for True, 1 for False, same as multiple choice
+  
+  // OPTIMIZATION: Batch fetch all player scores at once instead of individual queries
+  const playerIds = answers.map(a => a.player_id).filter((id, index, self) => self.indexOf(id) === index);
+  const { data: players } = await supabase
+    .from("players")
+    .select("id, score")
+    .in("id", playerIds);
+  
+  const playerScores = new Map((players || []).map(p => [p.id, p.score || 0]));
+  
+  // Calculate all updates in memory first
+  const answerUpdates: Array<{ id: string; is_correct: boolean; points_earned: number }> = [];
+  const scoreUpdates: Array<{ id: string; score: number }> = [];
+  const basePoints = question.points * (question.multiplier || 1);
+  
   for (const answer of answers) {
     // Skip answers that have been manually scored (shouldn't happen for multiple choice or true/false, but just in case)
     if (answer.manually_scored) {
@@ -1010,7 +1097,6 @@ export async function revealAnswers(gameId: string, questionId: string) {
     } else {
       // Traditional game scoring
       const wagerAmount = answer.wager || 0;
-      const basePoints = question.points * (question.multiplier || 1);
       
       if (question.has_wager && wagerAmount > 0) {
         // If wagering is enabled and player wagered
@@ -1027,31 +1113,56 @@ export async function revealAnswers(gameId: string, questionId: string) {
       }
     }
 
-    // Get current player score
-    const { data: player } = await supabase
-      .from("players")
-      .select("score")
-      .eq("id", answer.player_id)
-      .single();
-
-    const currentScore = player?.score || 0;
+    const currentScore = playerScores.get(answer.player_id) || 0;
     const previousPoints = answer.points_earned || 0;
     const newScore = currentScore - previousPoints + pointsEarned;
 
-    // Update player answer
-    await supabase
-      .from("player_answers")
-      .update({
-        is_correct: isCorrect,
-        points_earned: pointsEarned,
-      })
-      .eq("id", answer.id);
-
-    // Update player score (allow negative scores)
-    await supabase
-      .from("players")
-      .update({ score: newScore })
-      .eq("id", answer.player_id);
+    // Collect updates for batch processing
+    answerUpdates.push({
+      id: answer.id,
+      is_correct: isCorrect,
+      points_earned: pointsEarned,
+    });
+    
+    scoreUpdates.push({
+      id: answer.player_id,
+      score: newScore,
+    });
+  }
+  
+  // OPTIMIZATION: Parallel update all player answers (much faster than sequential)
+  if (answerUpdates.length > 0) {
+    const updatePromises = answerUpdates.map(update =>
+      supabase
+        .from("player_answers")
+        .update({
+          is_correct: update.is_correct,
+          points_earned: update.points_earned,
+        })
+        .eq("id", update.id)
+    );
+    
+    const results = await Promise.all(updatePromises);
+    const errors = results.filter(r => r.error).map(r => r.error);
+    if (errors.length > 0) {
+      throw new Error(`Failed to update some answers: ${errors[0].message}`);
+    }
+  }
+  
+  // OPTIMIZATION: Parallel update all player scores (much faster than sequential)
+  if (scoreUpdates.length > 0) {
+    const updatePromises = scoreUpdates.map(update =>
+      supabase
+        .from("players")
+        .update({ score: update.score })
+        .eq("id", update.id)
+    );
+    
+    const results = await Promise.all(updatePromises);
+    const errors = results.filter(r => r.error).map(r => r.error);
+    if (errors.length > 0) {
+      throw new Error(`Failed to update some scores: ${errors[0].message}`);
+    }
   }
 
   // Mark answers as revealed and clear timer start time

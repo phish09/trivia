@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useParams } from "next/navigation";
-import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, deleteQuestion, exportQuestions, importQuestions, updateGameSettings } from "../../actions";
+import { getGame, addQuestion, updateQuestion, activateQuestion, revealAnswers, nextQuestion, resetQuestion, resetGame, endGame, reorderQuestions, manuallyAwardPoints, verifyHostPassword, kickPlayer, kickAllPlayers, deleteQuestion, exportQuestions, importQuestions, updateGameSettings } from "../../actions";
 import { useRouter } from "next/navigation";
 import { useConfetti } from "@/hooks/useConfetti";
 import { useTimer } from "@/hooks/useTimer";
@@ -65,7 +65,7 @@ function HostGameContent() {
     questions: false,
   });
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | 'delete' | 'kick' | null>(null);
+  const [confirmModalType, setConfirmModalType] = useState<'reset' | 'end' | 'delete' | 'kick' | 'kickAll' | null>(null);
   const [questionToDelete, setQuestionToDelete] = useState<string | null>(null);
   const [playerToKick, setPlayerToKick] = useState<{id: string, username: string} | null>(null);
   const [showRoundLimitModal, setShowRoundLimitModal] = useState(false);
@@ -631,6 +631,28 @@ function HostGameContent() {
     }
   }
 
+  function handleKickAllPlayersClick() {
+    if (!game) return;
+    setConfirmModalType('kickAll');
+    setShowConfirmModal(true);
+  }
+
+  async function handleKickAllPlayers() {
+    if (!game) return;
+
+    try {
+      await kickAllPlayers(game.id);
+      await loadGame();
+      setShowConfirmModal(false);
+      setConfirmModalType(null);
+    } catch (error) {
+      console.error("Failed to kick all players:", error);
+      alert("Failed to kick all players. Please try again.");
+      setShowConfirmModal(false);
+      setConfirmModalType(null);
+    }
+  }
+
   function toggleSection(section: string) {
     setMinimizedSections(prev => ({
       ...prev,
@@ -1131,6 +1153,7 @@ function HostGameContent() {
         minimized={minimizedSections.players}
         onToggleMinimize={() => toggleSection('players')}
         onKickPlayer={handleKickPlayerClick}
+        onKickAll={handleKickAllPlayersClick}
       />
 
       <QuestionForm
@@ -1245,7 +1268,7 @@ function HostGameContent() {
           setShowConfirmModal(false);
           setConfirmModalType(null);
         }}
-        title={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete question' : confirmModalType === 'kick' ? 'Kick player' : 'End game'}
+        title={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete question' : confirmModalType === 'kick' ? 'Kick player' : confirmModalType === 'kickAll' ? 'Kick all players' : 'End game'}
         message={
           confirmModalType === 'reset'
             ? (
@@ -1271,6 +1294,12 @@ function HostGameContent() {
                   Are you sure you want to kick <strong>{playerToKick?.username}</strong>? They will be removed from the game.
                 </>
               )
+            : confirmModalType === 'kickAll'
+            ? (
+                <>
+                  Are you sure you want to kick <strong>all {game?.players?.length || 0} players</strong>? They will all be removed from the game. <strong>This action cannot be undone.</strong>
+                </>
+              )
             : (
                 <>
                   Are you sure you want to end the game? Players will see the final scoreboard.
@@ -1280,9 +1309,9 @@ function HostGameContent() {
               )
         }
         isConfirmDialog={true}
-        confirmText={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete' : confirmModalType === 'kick' ? 'Kick player' : 'End game'}
+        confirmText={confirmModalType === 'reset' ? 'Reset game' : confirmModalType === 'delete' ? 'Delete' : confirmModalType === 'kick' ? 'Kick player' : confirmModalType === 'kickAll' ? 'Kick all players' : 'End game'}
         cancelText="Cancel"
-        onConfirm={confirmModalType === 'reset' ? handleResetGame : confirmModalType === 'delete' ? handleDeleteQuestion : confirmModalType === 'kick' ? handleKickPlayer : handleEndGame}
+        onConfirm={confirmModalType === 'reset' ? handleResetGame : confirmModalType === 'delete' ? handleDeleteQuestion : confirmModalType === 'kick' ? handleKickPlayer : confirmModalType === 'kickAll' ? handleKickAllPlayers : handleEndGame}
         onCancel={() => {
           setShowConfirmModal(false);
           setConfirmModalType(null);
