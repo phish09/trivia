@@ -140,13 +140,18 @@ export default function RootLayout({
           `}
         </Script>
         
-        {/* Google AdSense */}
-        <Script
-          async
-          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5460760645764983"
-          crossOrigin="anonymous"
-          strategy="afterInteractive"
-        />
+        {/* Google AdSense - loaded via raw script to avoid data-nscript attribute */}
+        <Script id="adsense-loader" strategy="afterInteractive">
+          {`
+            (function() {
+              var s = document.createElement('script');
+              s.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5460760645764983';
+              s.async = true;
+              s.crossOrigin = 'anonymous';
+              document.head.appendChild(s);
+            })();
+          `}
+        </Script>
         <div className="relative z-10">
           {children}
         </div>
