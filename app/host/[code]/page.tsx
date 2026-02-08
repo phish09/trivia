@@ -1387,6 +1387,7 @@ function HostGameContent() {
                   playerId={selectedPlayer.id}
                   playerUsername={selectedPlayer.username}
                   currentQuestionIndex={game.currentQuestionIndex}
+                  gameEnded={game.gameEnded}
                 />
               ) : (
                 <div className="text-center py-8 text-slate-500">

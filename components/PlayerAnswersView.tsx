@@ -31,6 +31,7 @@ interface PlayerAnswersViewProps {
   playerId: string;
   playerUsername: string;
   currentQuestionIndex: number | null; // Track which questions have been asked
+  gameEnded?: boolean; // When game has ended, show all questions
 }
 
 export default function PlayerAnswersView({
@@ -39,13 +40,17 @@ export default function PlayerAnswersView({
   playerId,
   playerUsername,
   currentQuestionIndex,
+  gameEnded,
 }: PlayerAnswersViewProps) {
   // Only show questions that have already been asked
   // A question has been asked if its order is <= currentQuestionIndex
-  // If currentQuestionIndex is null, no questions have been asked yet
-  const askedQuestions = currentQuestionIndex !== null
-    ? questions.filter(q => (q.questionOrder || 0) <= currentQuestionIndex)
-    : [];
+  // If the game has ended, show ALL questions (currentQuestionIndex is null when game ends)
+  // If currentQuestionIndex is null and game hasn't ended, no questions have been asked yet
+  const askedQuestions = gameEnded
+    ? questions
+    : currentQuestionIndex !== null
+      ? questions.filter(q => (q.questionOrder || 0) <= currentQuestionIndex)
+      : [];
   
   const sortedQuestions = [...askedQuestions].sort(
     (a, b) => (a.questionOrder || 0) - (b.questionOrder || 0)
