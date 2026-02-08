@@ -12,6 +12,7 @@ import RandomQuestionDisplay from "@/components/RandomQuestionDisplay";
 import AnswerSubmission from "@/components/AnswerSubmission";
 import QuestionDisplay from "@/components/QuestionDisplay";
 import { trackAnswerSubmitted } from "@/lib/analytics";
+import KofiWidget from "@/components/KofiWidget";
 
 function PlayPageContent() {
   const params = useParams();
@@ -1917,6 +1918,7 @@ function PlayPageContent() {
           }}
           showCloseButton={true}
         />
+        <KofiWidget />
       </div>
     );
   }
@@ -2030,6 +2032,7 @@ function PlayPageContent() {
             }}
             showCloseButton={true}
           />
+          <KofiWidget />
         </div>
       </div>
     );
@@ -2442,6 +2445,7 @@ function PlayPageContent() {
           }}
           showCloseButton={true}
         />
+        <KofiWidget />
       </div>
     );
   }
@@ -2666,6 +2670,7 @@ function PlayPageContent() {
       </div>
 
       {/* Leave Game Confirmation Modal */}
+      <KofiWidget />
       <Modal
         isOpen={showLeaveModal}
         onClose={() => {

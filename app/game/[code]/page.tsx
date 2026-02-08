@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useState, useRef } from "react";
 import { getGame } from "@/app/actions";
+import KofiWidget from "@/components/KofiWidget";
 
 export default function GameDisplayPage() {
   const params = useParams();
@@ -317,6 +318,7 @@ export default function GameDisplayPage() {
           </div>
         )}
       </div>
+      <KofiWidget />
     </main>
   );
 }

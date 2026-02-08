@@ -15,6 +15,7 @@ import GameControls from "@/components/GameControls";
 import PlayerAnswersView from "@/components/PlayerAnswersView";
 import type { QuestionInput } from "@/types/game";
 import { trackQuestionAdded, trackGameStarted, trackGameEnded } from "@/lib/analytics";
+import KofiWidget from "@/components/KofiWidget";
 
 function HostGameContent() {
   const params = useParams();
@@ -1504,6 +1505,7 @@ function HostGameContent() {
           </div>
         </div>
       )}
+      <KofiWidget />
     </div>
   );
 }
