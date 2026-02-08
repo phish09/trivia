@@ -1,3 +1,5 @@
+import KofiWidget from "@/components/KofiWidget";
+
 export const metadata = {
   title: "Terms and Conditions - TriviYay!",
   description: "Terms and conditions for using TriviYay! trivia game platform",
@@ -113,6 +115,7 @@ export default function TermsPage() {
             </a>
           </div>
         </div>
+        <KofiWidget />
       </div>
     </div>
   );

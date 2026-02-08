@@ -1,4 +1,5 @@
 import Link from "next/link";
+import KofiWidget from "@/components/KofiWidget";
 
 export default function Home() {
   return (
@@ -64,6 +65,7 @@ export default function Home() {
           </Link>
         </div>
         <div className="flex justify-center gap-4 text-purple-300 py-6"><Link className="hover:text-white" href="/terms">Terms</Link><Link className="hover:text-white" href="/privacy">Privacy</Link></div>
+        <KofiWidget />
       </div>
     </main>
   );

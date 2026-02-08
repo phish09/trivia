@@ -5,7 +5,7 @@ const cspDirectives = [
   // Default: only allow same-origin
   "default-src 'self'",
 
-  // Scripts: self + Google Analytics + Google AdSense ecosystem
+  // Scripts: self + Google Analytics + Google AdSense ecosystem + Ko-fi
   [
     "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
     "https://www.googletagmanager.com",
@@ -18,12 +18,13 @@ const cspDirectives = [
     "https://*.adtrafficquality.google",
     "https://www.googletagservices.com",
     "https://*.gstatic.com",
+    "https://storage.ko-fi.com",
   ].join(" "),
 
-  // Styles: self + unsafe-inline (React inline styles + AdSense)
-  "style-src 'self' 'unsafe-inline'",
+  // Styles: self + unsafe-inline (React inline styles + AdSense + Ko-fi)
+  "style-src 'self' 'unsafe-inline' https://storage.ko-fi.com",
 
-  // Images: self + data URIs + Google services
+  // Images: self + data URIs + Google services + Ko-fi
   [
     "img-src 'self' data: blob:",
     "https://*.google.com",
@@ -33,6 +34,8 @@ const cspDirectives = [
     "https://*.doubleclick.net",
     "https://*.gstatic.com",
     "https://*.adtrafficquality.google",
+    "https://storage.ko-fi.com",
+    "https://ko-fi.com",
   ].join(" "),
 
   // Fonts: self + data URIs (Next.js self-hosts Google Fonts)

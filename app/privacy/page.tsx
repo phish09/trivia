@@ -1,3 +1,5 @@
+import KofiWidget from "@/components/KofiWidget";
+
 export const metadata = {
   title: "Privacy Policy - TriviYay!",
   description: "Privacy policy for TriviYay! trivia game platform",
@@ -170,6 +172,7 @@ export default function PrivacyPage() {
             </a>
           </div>
         </div>
+        <KofiWidget />
       </div>
     </div>
   );
