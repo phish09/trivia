@@ -134,13 +134,12 @@ export default function Modal({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, onClose]);
 
-  // Prevent body scroll when modal is open
+  // Prevent body scroll when modal is open (scrollbar-gutter: stable on html prevents layout shift)
   useEffect(() => {
     if (isOpen) {
-      const originalStyle = window.getComputedStyle(document.body).overflow;
-      document.body.style.overflow = 'hidden';
+      document.body.classList.add('modal-open');
       return () => {
-        document.body.style.overflow = originalStyle;
+        document.body.classList.remove('modal-open');
       };
     }
   }, [isOpen]);
