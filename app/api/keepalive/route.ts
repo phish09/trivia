@@ -5,7 +5,13 @@ export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token');
   const secret = process.env.KEEPALIVE_SECRET;
 
-  if (!secret || token !== secret) {
+  if (!secret) {
+    return NextResponse.json(
+      { error: 'KEEPALIVE_SECRET not configured. Add it in Netlify: Site settings > Environment variables' },
+      { status: 503 }
+    );
+  }
+  if (token !== secret) {
     return NextResponse.json(
       { error: 'Unauthorized' },
       { status: 401 }
