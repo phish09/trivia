@@ -2,9 +2,9 @@ name: Supabase Keepalive
 
 # Requires one of:
 #   Secret or variable SITE_URL  → https://your-app.netlify.app (no trailing slash)
-#   Secret KEEPALIVE_SECRET       → same value as KEEPALIVE_SECRET in Netlify
+#   Secret or variable KEEPALIVE_SECRET → same value as KEEPALIVE_SECRET in Netlify
 # Add at: https://github.com/<owner>/<repo>/settings/secrets/actions
-# Use the "Variables" tab for SITE_URL (it's public); use "Secrets" for KEEPALIVE_SECRET.
+# Prefer Secrets for KEEPALIVE_SECRET (sensitive); Variables also work.
 
 on:
   schedule:
@@ -20,9 +20,11 @@ jobs:
           SITE_URL_SECRET: ${{ secrets.SITE_URL }}
           SITE_URL_VAR: ${{ vars.SITE_URL }}
           TOKEN_SECRET: ${{ secrets.KEEPALIVE_SECRET }}
+          TOKEN_VAR: ${{ vars.KEEPALIVE_SECRET }}
         run: |
           SITE_URL="${SITE_URL_SECRET:-$SITE_URL_VAR}"
           SITE_URL="${SITE_URL%/}"
+          TOKEN="${TOKEN_SECRET:-$TOKEN_VAR}"
           if [ -z "$SITE_URL" ]; then
             echo "::error::SITE_URL is not set."
             echo "Add it: GitHub repo → Settings → Secrets and variables → Actions"
@@ -31,8 +33,8 @@ jobs:
             echo "Open: https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
             exit 1
           fi
-          if [ -z "$TOKEN_SECRET" ]; then
-            echo "::error::KEEPALIVE_SECRET is not set (Secrets tab only)."
+          if [ -z "$TOKEN" ]; then
+            echo "::error::KEEPALIVE_SECRET is not set (add under Secrets or Variables tab)."
             echo "Open: https://github.com/${GITHUB_REPOSITORY}/settings/secrets/actions"
             exit 1
           fi
@@ -43,10 +45,12 @@ jobs:
         env:
           SITE_URL_SECRET: ${{ secrets.SITE_URL }}
           SITE_URL_VAR: ${{ vars.SITE_URL }}
-          TOKEN: ${{ secrets.KEEPALIVE_SECRET }}
+          TOKEN_SECRET: ${{ secrets.KEEPALIVE_SECRET }}
+          TOKEN_VAR: ${{ vars.KEEPALIVE_SECRET }}
         run: |
           SITE_URL="${SITE_URL_SECRET:-$SITE_URL_VAR}"
           SITE_URL="${SITE_URL%/}"
+          TOKEN="${TOKEN_SECRET:-$TOKEN_VAR}"
           RESPONSE=$(curl -s -w "\n%{http_code}" "${SITE_URL}/api/keepalive?token=${TOKEN}")
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
